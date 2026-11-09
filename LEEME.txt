@@ -1,0 +1,33 @@
+FLUENT COACH v2 — carpeta lista para publicar (sitio estático)
+
+Contenido:
+  index.html            app completa (HTML+CSS+JS en un solo archivo, incluye los datos)
+  manifest.webmanifest  manifiesto PWA (instalar en pantalla de inicio)
+  sw.js                 service worker (funciona sin conexión; nunca guarda llamadas a Azure/IA)
+  icons/                apple-touch-icon.png (180), icon-192.png, icon-512.png, icon-maskable-512.png
+  vendor/speech-sdk.min.js   Microsoft Cognitive Services Speech SDK 1.53.0 (licencia MIT en LICENSE-speech-sdk.txt)
+  .nojekyll             para GitHub Pages
+
+IMPORTANTE: el iPhone solo permite el micrófono en https://. Publica esta carpeta en un hosting con https.
+
+Probar en la computadora:  cd dist && python3 -m http.server 8765  → abre http://localhost:8765
+
+Opción A — Cloudflare Pages (gratis, https, cuenta necesaria):
+  npx wrangler login
+  npx wrangler pages deploy dist --project-name fluent-coach
+  → https://fluent-coach.pages.dev   (o arrastra la carpeta en dash.cloudflare.com → Workers & Pages → Create → Pages → Upload assets)
+
+Opción B — GitHub Pages (gratis, https, cuenta necesaria):
+  gh auth login
+  cd dist && git init -b main && git add . && git commit -m "Fluent Coach"
+  gh repo create fluent-coach --public --source . --push
+  Settings → Pages → Deploy from branch → main / (root)
+  → https://TU-USUARIO.github.io/fluent-coach/
+
+Opción C — Netlify:
+  Sin cuenta (prueba de 1 hora, protegida con contraseña):  npx netlify-cli deploy --dir=dist --no-build --allow-anonymous
+  Permanente: crea cuenta y usa  npx netlify-cli deploy --dir=dist --prod  (o app.netlify.com/drop)
+
+Luego en el iPhone: abre la URL en Safari → Compartir → Agregar a pantalla de inicio.
+En la app: ⚙️ Ajustes → pega tu clave de Azure Speech (F0 gratis) y tu clave de IA → Probar conexión.
+Tus claves quedan solo en tu teléfono (localStorage). No subas claves al repositorio.
