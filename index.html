@@ -149,6 +149,8 @@ details{margin:.5rem 0}summary{cursor:pointer;color:var(--acc);font-weight:600;p
 .matlist{list-style:none;padding:0}.matlist li{padding:.45rem 0;border-bottom:1px solid #ffffff14;word-break:break-word}.matlist li button{float:right}
 #irTab{width:100%;border-collapse:collapse;font-size:.9rem}#irTab td,#irTab th{padding:.3rem;border-bottom:1px solid #ffffff14;text-align:left}
 .card.focus{outline:2px solid var(--acc)}
+
+.free-hero{border:1px solid var(--acc)}
 </style></head><body>
 <header class="top">
   <div class="brand">🗽 Fluent Coach</div>
@@ -179,6 +181,7 @@ details{margin:.5rem 0}summary{cursor:pointer;color:var(--acc);font-weight:600;p
 </section>
 <nav id="tabs">
   <button data-tab="home" class="act">🏠 Inicio</button>
+  <button data-tab="free">🧑‍🏫 Tutor libre</button>
   <button data-tab="daily">📅 Hoy</button>
   <button data-tab="gram">📘 Gramática</button>
   <button data-tab="tutor">🤖 Tutor IA</button>
@@ -772,7 +775,7 @@ async function coachLoop(it,box,r,o={}){const T=S.settings.threshold||80,maxW=S.
 
 /* ================= VIEWS ================= */
 const ALL_ITEMS=()=>[...DATA.dialogues.flatMap(d=>d.lines),...DATA.idioms,...DATA.idioms.map(i=>i.ex),...DATA.questions];
-function show(tab){$$('nav#tabs button').forEach(b=>b.classList.toggle('act',b.dataset.tab===tab));$$('.view').forEach(v=>v.classList.toggle('act',v.id==='v-'+tab));stopListening();
+function show(tab){if(tab==='free'){return startFree()}$$('nav#tabs button').forEach(b=>b.classList.toggle('act',b.dataset.tab===tab));$$('.view').forEach(v=>v.classList.toggle('act',v.id==='v-'+tab));stopListening();
  CARDS={};if(typeof GU!=='undefined'&&GU)GU.stop=true;if(typeof LOOP!=='undefined'&&LOOP){LOOP.stop=true}tuStopAll();stopAudio();
  if(DAILY&&DAILY.active&&tab!=='daily'){DAILY.stop=true;DAILY.active=false;DAILY.cancelTap&&DAILY.cancelTap();if(Object.keys(SESSION.items).length)setTimeout(()=>endSession(null),400)}
  const f={daily:renderDaily,tutor:renderTutor,pron:renderPron,settings:renderSettings,home:renderHome,lessons:renderLessons,idioms:renderIdioms,pairs:renderPairs,conv:renderConv,f432:render432,review:renderReview,test:renderTest,stats:renderStats,method:renderMethod,gram:renderGram,slang:renderSlang}[tab];f&&f();window.scrollTo(0,0);location.hash=tab}
@@ -788,6 +791,7 @@ function renderHome(){setTimeout(()=>{const h=$('#homeDaily');if(h)h.innerHTML=h
   ['👂','Pares mínimos: 10 rondas',Math.min(1,t.mp/10),'pairs'],
   ['🗣️',aiCfg()?'Tutor IA: conversa 6 turnos sobre lo que quieras':'Conversación: responde 3 preguntas en voz alta',Math.min(1,t.conv/(aiCfg()?6:3)),aiCfg()?'tutor':'conv']];
  $('#v-home').innerHTML=`<h2>${greet}, Yonathan 👋</h2>
+ <div class="card daily-hero free-hero"><div class="row" style="justify-content:space-between;margin:0"><b>🧑‍🏫 Tutor libre</b><span class="small mut">voz o texto</span></div><div class="small">Platica con Sam de lo que quieras: te aconseja cómo decirlo en inglés, practican la situación y te corrige con calma.</div><div class="row"><button class="pri big" onclick="startFree()">▶ Empezar a platicar</button></div></div>
  <div class="grid">
   <div class="card"><div class="mut small">Meta de hoy</div><div class="kpi">${min}/${goal} min</div><div class="bar"><i style="width:${Math.min(100,min/goal*100)}%"></i></div></div>
   <div class="card"><div class="mut small">Racha</div><div class="kpi">🔥 ${streak()} días</div><div class="small mut">No la rompas: practica aunque sean 5 min.</div></div>
@@ -1048,7 +1052,8 @@ function tutorSystem(mode,topic){const lvl=S.tests.length?S.tests[S.tests.length
  const ratio=cl==='es'?`LANGUAGE RATIO "Más español": the student is a beginner who does not understand much spoken English yet. Speak to him MAINLY IN SPANISH (about 75-80% of what you say): greet, guide, explain, give feedback and corrections in friendly, simple Mexican Spanish. In each turn introduce only ONE short English phrase (3-8 words), explain in Spanish what it means and when to use it, and ask him to repeat it (put it in "practice"). Then ask him a very simple question he can answer in English, and give him a model answer in "practice" or as an English segment. If he answers in Spanish, that is OK: show him how to say it in English.`
   :cl==='mix'?`LANGUAGE RATIO "Mitad y mitad": speak about half in Spanish and half in simple English. Use Spanish for explanations, corrections and instructions; use short, simple English sentences for the conversation itself, and give one English phrase to repeat each turn in "practice".`
   :`LANGUAGE RATIO "Más inglés": speak mostly in simple, natural English (short sentences). Use Spanish only for explanations of corrections, instructions and a short summary when something might be hard. Still give one useful English phrase to repeat in "practice".`;
- const m=mode==='explain'?'EXPLAIN — the student wants you to explain a topic. Explain clearly and simply (concrete examples), check understanding, and teach the key English phrases for that topic.'
+ const m=mode==='free'?`TUTOR LIBRE — you are his friendly personal tutor, like a bilingual friend. You opened by asking what he wants to talk about today. Whatever topic he picks (e.g. how to order in a restaurant, a job interview, small talk), talk WITH him mostly in Spanish like a real person: give practical advice and concrete English examples (e.g. "te aconsejo decir: I'd like the chicken, please; así suena más natural"). When useful, contrast the most basic way with the more natural way, invite him to try saying it, and offer to role-play the situation (you play the waiter, interviewer, etc.); if he accepts, stay in the role and speak your role lines in short simple English, stepping out in Spanish only to coach. Always end with a short follow-up question or invitation so the conversation keeps going. FREE CORRECTOR: whenever his attempt (English or Spanish mixed with English) has a grammar, word-choice or pronunciation problem, correct it naturally in conversational Spanish inside your reply (say what sounded off and the right way, then ask him to repeat it) AND list it in "corrections"; put the phrase he should repeat in "practice". Gently fix an obvious Spanish slip only if it helps clarity (light touch, at most once in a while). Keep every turn SHORT: 2 to 4 sentences in total.`
+  :mode==='explain'?'EXPLAIN — the student wants you to explain a topic. Explain clearly and simply (concrete examples), check understanding, and teach the key English phrases for that topic.'
   :mode==='daily'?`DAILY LESSON — today's lesson phrase is "${topic}". He just practiced pronouncing it. Now hold a short, guided, beginner-friendly conversation in which you ask him easy questions that make him USE this phrase (and small variations). Give him model answers to repeat.`
   :'CONVERSATION (Tema libre) — he chose the topic himself; talk about it (or anything he brings up), be curious and keep it flowing.';
  const g=typeof gramCurrent==='function'?gramCurrent():null;
@@ -1072,8 +1077,19 @@ Use empty arrays / null when there is nothing to report. Never break character, 
 function tuSegs(j){if(Array.isArray(j.segments)&&j.segments.length)return j.segments.filter(x=>x&&x.text);const o=[];if(j.reply)o.push({lang:'en',text:j.reply,pr:j.reply_pr||'',es:j.reply_es||''});if(j.followup&&typeof j.followup==='string'&&!(j.reply||'').includes(j.followup.slice(0,20)))o.push({lang:'en',text:j.followup,pr:'',es:''});return o}
 function tuPlain(j){return tuSegs(j).map(x=>x.text).join(' ')}
 let TU=null;
+const FREE_GREET=['¡Hola, Yonathan! Qué gusto que estés aquí. Hoy soy tu tutor libre: hablamos de lo que tú quieras.','¡Hey, Yonathan! Qué bueno verte. Aquí platicamos de lo que se te antoje y yo te ayudo con el inglés.','¡Hola! Me da mucho gusto platicar contigo otra vez. Hoy tú eliges el tema y yo te acompaño.','¡Qué tal, Yonathan! Listo para practicar sin presiones. Tú mandas hoy.'];
+const FREE_ASK='¿De qué quieres empezar a hablar hoy?';
+const FREE_IDEAS=['Cómo pedir en un restaurante','Mi trabajo','Una entrevista de trabajo','Hablar con mis vecinos','Ir al doctor','Viajar en avión','Comprar ropa','Hacer amigos'];
+/* Tutor libre: local warm greeting (no API call), then free conversation with the AI */
+function startFree(force){show('tutor');$$('nav#tabs button').forEach(b=>b.classList.toggle('act',b.dataset.tab==='free'));location.hash='free';
+ if(!aiCfg()){$('#v-tutor').innerHTML=`<h2>🧑‍🏫 Tutor libre</h2><div class="card"><p>Aquí Sam platica contigo de <b>lo que tú quieras</b>, te aconseja cómo decirlo en inglés y te corrige con cariño.</p><p>${FREE_ASK} … Para empezar necesito tu <b>clave de IA</b> (xAI u OpenAI). Se guarda solo en este iPhone.</p><button class="pri big" onclick="show('settings')">⚙️ Configurar clave</button></div>`;coachSay('Para platicar en el tutor libre necesito que configures tu clave de inteligencia artificial en Ajustes.',{mood:'concern'});return}
+ if(!force&&TU&&TU.mode==='free'&&TU.msgs.length){tuRender();return}
+ tuNew('free','');tuRender();const g=pick(FREE_GREET);const st={role:'sam',j:{segments:[{lang:'es',text:g+' '+FREE_ASK}],practice:null,corrections:[],natural:null,vocab:[],pron_tips:[]},opening:true};
+ TU.turns.push(st);TU.msgs.push({role:'assistant',content:'[es] '+g+' '+FREE_ASK});$('#tuLog').insertAdjacentHTML('beforeend',tuTurnHTML(st)+`<div class="chips" id="freeIdeas">${FREE_IDEAS.map(x=>`<button class="sm" data-fi="${esc(x)}">${esc(x)}</button>`).join('')}</div>`);
+ $$('#freeIdeas [data-fi]').forEach(b=>b.onclick=()=>{$('#freeIdeas').remove();tuSend(b.dataset.fi)});S.tutorCur=tuSerialize();save();
+ TU.stopSpeak=false;coachSay(esc(g)+' <b>'+FREE_ASK+'</b>',{es:g+' '+FREE_ASK,mood:'happy'})}
 function tuNew(mode,topic){TU={id:Date.now(),mode,topic,msgs:[],turns:[],t0:Date.now(),pron:[],ctl:null,busy:false};S.tutorCur=TU;save()}
-function tuTrim(){/* keep system + last 14 messages to bound cost */return TU.msgs.slice(-14)}
+function tuTrim(){/* keep system + last 14 messages to bound cost */return TU.msgs.slice(TU.mode==='free'?-24:-14)}
 const TU_TOPICS=[['Mi día','Let\'s talk about my day.'],['Viajes','I want to talk about travel.'],['Trabajo','Let\'s talk about my job.'],['Tecnología e IA','Let\'s talk about technology and AI.'],['Películas y series','Let\'s talk about movies and TV shows.'],['Fútbol / deportes','Let\'s talk about sports.'],['Comida','Let\'s talk about food and cooking.'],['Entrevista de trabajo (simulacro)','Can we practice a job interview? You are the interviewer.']];
 TU_TOPICS.push(['Familia','Let\'s talk about my family.'],['Música','Let\'s talk about music.'],['Mi ciudad','Let\'s talk about my city.'],['Salud y ejercicio','Let\'s talk about health and exercise.'],['Dinero y compras','Let\'s talk about money and shopping.'],['Pedir en un restaurante (simulacro)','Let\'s role-play ordering food at a restaurant. You are the waiter.'],['En el aeropuerto (simulacro)','Let\'s role-play checking in at the airport.'],['Planes para el futuro','Let\'s talk about my plans for the future.'],['Mi infancia','Let\'s talk about my childhood.'],['Noticias de hoy','Let\'s talk about the news.']);
 const TU_SUG=['my weekend','my job','my family','travel','food','soccer','movies','music','my city','technology','my plans for the future','a job interview','buying a car','renting an apartment','going to the doctor','small talk with neighbors','Mi día','Mi trabajo','Cómo funciona el internet','La diferencia entre say y tell','Cómo pedir un aumento','Hablar por teléfono'];
@@ -1081,7 +1097,7 @@ const TU_EXPLAIN=[['make vs do','Explain the difference between "make" and "do".
 function renderTutor(){const v=$('#v-tutor');
  if(!aiCfg()){v.innerHTML=`<h2>🤖 Tutor IA</h2><div class="card"><p>Habla de <b>cualquier tema</b> o pide que te explique <b>lo que quieras</b>. Sam te responde con voz, subtítulo de pronunciación, correcciones de gramática y frases más naturales.</p><p>Para activarlo necesitas una <b>clave de IA</b> (xAI o OpenAI). Para que también evalúe tus <b>fonemas</b> mientras conversas, agrega Azure Speech.</p><button class="pri big" onclick="show('settings')">⚙️ Configurar claves</button></div>`;return}
  if(TU&&TU.msgs.length){tuRender();return}
- v.innerHTML=`<h2>🤖 Tutor IA</h2><div class="card"><div class="row"><button class="pri" id="tuM1">💬 Tema libre</button><button id="tuM2">📚 Explícame un tema</button></div>
+ v.innerHTML=`<h2>🤖 Tutor IA</h2><div class="card daily-hero"><b>🧑‍🏫 Tutor libre</b><div class="small">La forma más fácil: Sam te saluda, le dices de qué quieres hablar y platican.</div><div class="row"><button class="pri big" onclick="startFree(true)">▶ Abrir Tutor libre</button></div></div><div class="card"><div class="row"><button class="pri" id="tuM1">💬 Tema libre</button><button id="tuM2">📚 Explícame un tema</button></div>
  <h3>🎯 Tema libre: elige de qué hablamos</h3>
  <label class="small mut" for="tuTopic">Escribe cualquier tema (en inglés o español) o toca una sugerencia:</label><input type="text" id="tuTopic" list="tuSug" placeholder="Ej: my weekend · cómo funciona el internet · mi trabajo"><datalist id="tuSug">${TU_SUG.map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
  <div class="chips" id="tuChips"></div><label>Idioma del coach<select id="tuCL">${Object.entries(COACH_LANG).map(([k,v])=>`<option value="${k}" ${k===(S.settings.coachLang||'es')?'selected':''}>${v}</option>`).join('')}</select></label><label class="chk"><input type="checkbox" id="tuDr" ${S.settings.tuDrill!==false?'checked':''}> 🛠️ Corregir palabras en tiempo real (repetir hasta que salga bien)</label><label class="chk"><input type="checkbox" id="tuSl" ${S.settings.tuSlang?'checked':''}> 🗽 Incluir slang e inglés afroamericano</label><div class="row"><button class="pri big" id="tuGo">▶ Empezar</button></div>
@@ -1091,7 +1107,7 @@ function renderTutor(){const v=$('#v-tutor');
  $('#tuM1').onclick=()=>{mode='chat';$('#tuM1').classList.add('pri');$('#tuM2').classList.remove('pri');chips()};$('#tuM2').onclick=()=>{mode='explain';$('#tuM2').classList.add('pri');$('#tuM1').classList.remove('pri');chips()};chips();
  $('#tuCL').onchange=e=>{S.settings.coachLang=e.target.value;save()};$('#tuDr').onchange=e=>{S.settings.tuDrill=e.target.checked;save()};$('#tuSl').onchange=e=>{S.settings.tuSlang=e.target.checked;save()};
  $('#tuGo').onclick=()=>{const t=$('#tuTopic').value.trim();tuNew(mode,t);tuRender();tuSend(t||(mode==='explain'?'Pregúntame qué tema quiero que me expliques.':'Tema libre: pregúntame de qué quiero hablar hoy y dame 3 ideas.'),{opening:true})}}
-function tuRender(){const v=$('#v-tutor');v.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin:0">${TU.mode==='daily'?'📅 Lección del día':TU.mode==='explain'?'🤖 Explícame':'💬 Tema libre'}: <span class="small mut">${esc(TU.topic||'tema libre')}</span></h2><button class="sm" id="tuEnd">🏁 Terminar sesión</button></div>
+function tuRender(){const v=$('#v-tutor');v.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin:0">${TU.mode==='daily'?'📅 Lección del día':TU.mode==='free'?'🧑‍🏫 Tutor libre':TU.mode==='explain'?'🤖 Explícame':'💬 Tema libre'}: <span class="small mut">${esc(TU.topic||(TU.mode==='free'?'tú eliges':'tema libre'))}</span></h2><button class="sm" id="tuEnd">🏁 Terminar sesión</button></div>
  <div id="tuLog"></div>
  <div id="tuBar"><div id="tuLive" class="small mut"></div><div class="row" style="flex-wrap:nowrap;margin:0"><button class="mic big" id="tuMic" aria-label="Hablar">🎤</button><button class="sm" id="tuLang" title="Idioma en el que vas a hablar">${S.settings.tuInLang==='es'?'🇲🇽 ES':'🇺🇸 EN'}</button><input type="text" id="tuText" placeholder="Habla con 🎤 o escribe aquí…" enterkeyhint="send"><button class="pri" id="tuSendB">➤</button></div></div>`;
  const log=$('#tuLog');TU.turns.forEach(t=>log.insertAdjacentHTML('beforeend',tuTurnHTML(t)));
@@ -1120,7 +1136,7 @@ async function tuMic(){if(TU.drilling&&LOOP){LOOP.stop=true;AZ.stop();stopAudio(
    tuSend(r.text,{pa:r.words.length?r:null})}catch(e){TU.ctl=null;b.dataset.busy='';b.textContent='🎤';micFail(e)}return}
  if(canListen()){b.dataset.busy='1';b.textContent='⏹';TU.ctl=listenLong(t=>$('#tuLive').textContent='🎧 '+t);const r=await TU.ctl.done;TU.ctl=null;b.dataset.busy='';b.textContent='🎤';$('#tuLive').textContent='';if(r.text)tuSend(r.text);return}
  $('#tuLive').textContent='Este navegador no puede escucharte sin Azure. Escribe tu mensaje o configura Azure en ⚙️.';$('#tuText').focus()}
-async function tuSend(text,{pa,opening}={}){if(TU.busy)return;TU.busy=true;TU.stopSpeak=false;const log=$('#tuLog');
+async function tuSend(text,{pa,opening}={}){if(TU.busy)return;if(TU.mode==='free'&&!TU.topic&&!opening){TU.topic=String(text).slice(0,60);const fi=$('#freeIdeas');if(fi)fi.remove()}TU.busy=true;TU.stopSpeak=false;const log=$('#tuLog');
  if(!opening){const ut={role:'user',text,pa:pa||null};TU.turns.push(ut);log.insertAdjacentHTML('beforeend',tuTurnHTML(ut))}
  let content=opening?`(The student opened the session. Their request/topic: "${text}". Greet him briefly in Spanish and start.)`:`Student said${pa?' (speech transcript)':' (typed)'}: "${text}"`;
  if(pa){const bad=pa.words.filter(w=>w.acc!=null&&w.acc<70&&w.err!=='Insertion').slice(0,5).map(w=>{const d=(w.phon||[]).map(phDiag).sort((a,b)=>a.acc-b.acc)[0];return `${w.w} (${w.acc}${d&&d.heard?`, /${d.exp}/ sounded like /${d.heard}/`:d?`, weak /${d.exp}/`:''})`});
@@ -1147,11 +1163,11 @@ async function tuSpeak(j,cor){const segs=tuSegs(j);TU.speaking=true;
  const pc=j.practice&&j.practice.en?j.practice:null;if(TU&&!TU.stopSpeak&&pc){$('#bubbleText').innerHTML=`🔁 <b>${esc(pc.en)}</b><div class="pr">${prHTML(pc.pr||'')}</div><div class="es">${esc(pc.es||'')}</div>`;await speak(say('repeat'),{lang:'es'});await speakSlow(pc.en);await speak(pc.en);await speak(pick(['Cuando quieras, toca Repetir, o contéstame con el micrófono.','Toca Repetir cuando estés listo, o platícame con el micrófono.','Tu turno: repítela o contéstame.']),{lang:'es'})}
  if(TU)TU.speaking=false}
 function tuSerialize(){return{id:TU.id,mode:TU.mode,topic:TU.topic,msgs:TU.msgs,turns:TU.turns.map(t=>t.role==='user'?{role:'user',text:t.text,pa:t.pa?{pa:t.pa.pa,words:t.pa.words.filter(w=>w.acc!=null&&w.acc<80).slice(0,8),text:t.pa.text}:null}:t),t0:TU.t0,pron:TU.pron}}
-function tuEnd(){if(!TU)return;if(TU.ctl)TU.ctl.stop();const n=TU.turns.filter(t=>t.role==='user').length;const mistakes=TU.turns.filter(t=>t.role==='sam').reduce((a,t)=>a+((t.j.corrections||[]).length),0);
+function tuEnd(){if(!TU)return;if(TU.ctl)TU.ctl.stop();const n=TU.turns.filter(t=>t.role==='user').length;if(n){SESSION.conv=SESSION.conv||[];SESSION.conv.push({mode:TU.mode==='free'?'Tutor libre':TU.mode==='explain'?'Explícame':TU.mode==='daily'?'Lección del día':'Tema libre',topic:TU.topic||'',turns:n,said:TU.turns.filter(t=>t.role==='user').slice(-6).map(t=>t.text),sam:TU.turns.filter(t=>t.role==='sam').slice(-3).map(t=>tuPlain(t.j).slice(0,200))})}const mistakes=TU.turns.filter(t=>t.role==='sam').reduce((a,t)=>a+((t.j.corrections||[]).length),0);
  const pron=TU.pron.length?Math.round(TU.pron.reduce((a,b)=>a+b,0)/TU.pron.length):null;
  if(n){S.sessions=S.sessions||[];S.sessions.push({t:TU.t0,topic:TU.topic||'',mode:TU.mode,turns:n,mistakes,pron,min:Math.round((Date.now()-TU.t0)/60000)});if(S.sessions.length>100)S.sessions.shift();S.tutor.sessions=(S.tutor.sessions||0)+1;addXP(15)}
  S.tutorCur=null;save();const was=TU;TU=null;
- $('#v-tutor').innerHTML=`<h2>🏁 Sesión terminada</h2><div class="card"><div class="chips"><span>${n} turnos</span><span>${mistakes} correcciones (guardadas en Repaso)</span>${pron!=null?`<span>Pronunciación promedio ${pron}</span>`:''}</div><p>${n>=6?'¡Gran sesión! Hablar de verdad es lo que más desarrolla la fluidez.':'Sesión corta. Intenta llegar a 8–10 turnos: la fluidez sale de hablar mucho.'}</p><div class="row"><button class="pri" onclick="renderTutor()">Nueva sesión</button><button onclick="show('review')">Repasar mis errores</button></div></div>`;
+ $('#v-tutor').innerHTML=`<h2>🏁 Sesión terminada</h2><div class="card"><div class="chips"><span>${n} turnos</span><span>${mistakes} correcciones (guardadas en Repaso)</span>${pron!=null?`<span>Pronunciación promedio ${pron}</span>`:''}</div><p>${n>=6?'¡Gran sesión! Hablar de verdad es lo que más desarrolla la fluidez.':'Sesión corta. Intenta llegar a 8–10 turnos: la fluidez sale de hablar mucho.'}</p><div class="row">${was.mode==='free'?'<button class="pri" onclick="startFree(true)">🧑‍🏫 Otra charla</button>':'<button class="pri" onclick="renderTutor()">Nueva sesión</button>'}<button onclick="show('review')">Repasar mis errores</button></div></div>`;
  endSession('#v-tutor')}
 function tuStopAll(){if(TU){TU.stopSpeak=true;if(TU.ctl)TU.ctl.stop();if(TU.drilling&&LOOP){LOOP.stop=true;AZ.stop()}}}
 if(S.tutorCur&&S.tutorCur.msgs&&S.tutorCur.msgs.length){TU=Object.assign({ctl:null,busy:false,pron:[]},S.tutorCur)}
@@ -1696,18 +1712,18 @@ async function dConvLocal(){const q=pick(DATA.questions);await dSay(`Ahora te ha
  $('#dlNext').innerHTML=`<button class="pri" onclick="dConvLocal()">💬 Otra pregunta</button><button onclick="DAILY&&(DAILY.active=false);show('lessons');openDialogue(pick(DATA.dialogues).id,'rp')">🎭 Diálogo de la vida real</button><button onclick="endSession('#v-daily')">🏁 Terminar sesión</button>`}
 
 /* ---------- Session recap ---------- */
-async function endSession(sel){const items=Object.values(SESSION.items);const tutorTurns=SESSION.cors.length;
- if(!items.length&&!tutorTurns){coachSay('Todavía no practicamos nada en esta sesión. ¡Empecemos con la lección del día!');return}
+async function endSession(sel){const items=Object.values(SESSION.items);const tutorTurns=SESSION.cors.length;const conv=SESSION.conv||[];
+ if(!items.length&&!tutorTurns&&!conv.length){coachSay('Todavía no practicamos nada en esta sesión. ¡Empecemos con la lección del día!');return}
  const min=Math.max(1,Math.round((Date.now()-SESSION.t0)/60000)),xp=S.xp-(SESSION.xp0==null?S.xp:SESSION.xp0);
  const avg=items.length?Math.round(items.reduce((a,x)=>a+x.best,0)/items.length):null;
  const sph=Object.entries(SESSION.phon).filter(([k,v])=>v.n>=2&&PH[k]).map(([k,v])=>({k,avg:Math.round(v.sum/v.n)})).sort((a,b)=>a.avg-b.avg).slice(0,3).filter(x=>x.avg<80);
  const cors=SESSION.cors.slice(-8);const weakItems=items.filter(x=>x.best<(S.settings.threshold||80)).slice(0,4);
- const data={minutes:min,xp,phrases:items.map(x=>({en:x.en,es:x.es,best:x.best})),avg,weakPhonemes:sph.map(x=>({ph:x.k,ex:PH[x.k].ex,avg:x.avg})),corrections:cors.map(c=>({original:c.original,corrected:c.corrected,why:c.explanation_es}))};
+ const data={minutes:min,xp,phrases:items.map(x=>({en:x.en,es:x.es,best:x.best})),avg,weakPhonemes:sph.map(x=>({ph:x.k,ex:PH[x.k].ex,avg:x.avg})),corrections:cors.map(c=>({original:c.original,corrected:c.corrected,why:c.explanation_es})),conversations:conv.map(c=>({mode:c.mode,topic:c.topic,turns:c.turns,studentSaid:c.said,samSaid:c.sam}))};
  const host=sel?$(sel):null;const ph=`<div class="card recap" id="recapBox"><h3>📝 Preparando tu resumen…</h3></div>`;if(host){host.insertAdjacentHTML('beforeend',ph);host.lastElementChild.scrollIntoView({behavior:'smooth'})}else{$('#pmBody').innerHTML=ph;$('#pmodal').classList.add('show')}
  let rc=null;if(aiCfg()){try{const ac=new AbortController();const to=setTimeout(()=>ac.abort(),20000);
   rc=await aiChat([{role:'system',content:'You are Sam, a warm, honest English coach for Yonathan, a Spanish speaker. Write a SHORT end-of-session recap in warm, natural, conversational Mexican Spanish from the JSON data (do not invent things that are not in the data). It will be READ ALOUD by a voice: no symbols, no IPA, no slashes, no emojis, no markdown, no abbreviations; describe sounds in everyday words (e.g. "la th de think: lengua entre los dientes"), not phonetic symbols. Sound like a friendly human tutor, with varied encouraging phrases. Reply only JSON {"resumen":"2-3 spoken sentences: how it went, honest and motivating","aprendido":["phrases/grammar points/words learned today, each with the English in quotes and its meaning"],"puntajes":"one sentence with the scores","mejorar":["weak phonemes or recurring errors, with a short tip"],"tareas":["1-2 concrete tasks for tomorrow"]}'},{role:'user',content:JSON.stringify(data)}],{maxTokens:700,signal:ac.signal});clearTimeout(to)}catch(e){rc=null}}
  if(!rc||!rc.resumen){rc={resumen:`Hoy practicaste ${min} minuto${min>1?'s':''} y ganaste ${xp} puntos de experiencia. ${avg!=null?(avg>=85?'Tu pronunciación estuvo muy bien.':avg>=70?'Vas por buen camino con la pronunciación.':'La pronunciación todavía cuesta, pero cada intento cuenta.'):''} ¡Buen trabajo!`,
-  aprendido:[...items.slice(0,6).map(x=>`"${x.en}"${x.es?' = '+x.es:''}`),...cors.slice(0,3).map(c=>`"${c.corrected}" (en vez de "${c.original}")`)],
+  aprendido:[...conv.map(c=>`${c.mode}: ${c.turns} turnos${c.topic?' sobre «'+c.topic+'»':''}`),...items.slice(0,6).map(x=>`"${x.en}"${x.es?' = '+x.es:''}`),...cors.slice(0,3).map(c=>`"${c.corrected}" (en vez de "${c.original}")`)],
   puntajes:avg!=null?`Promedio de pronunciación: ${avg}/100 en ${items.length} frase${items.length>1?'s':''}.`:'',
   mejorar:[...sph.map(x=>{const f=phSay(x.k);return `El sonido de "${f?f[0]:PH[x.k].ex.split(',')[0]}" (${x.avg} de 100): ${f?f[1]:PH[x.k].how}.`}),...weakItems.map(x=>`Repetir "${x.en}" (mejor: ${x.best}).`),...cors.slice(0,2).map(c=>`Ojo: ${c.explanation_es||c.corrected}`)].slice(0,4),
   tareas:[sph[0]?`Practica 5 minutos el sonido de "${(phSay(sph[0].k)||[PH[sph[0].k].ex.split(',')[0]])[0]}" en Pronunciar.`:'Haz tu repaso del día.',weakItems[0]?`Repite "${weakItems[0].en}" hasta pasar de ${S.settings.threshold||80}.`:'Haz la lección del día y conversa 5 turnos con Sam.']}}
@@ -1715,7 +1731,7 @@ async function endSession(sel){const items=Object.values(SESSION.items);const tu
  const rec={t:Date.now(),min,xp,avg,n:items.length,resumen:String(rc.resumen||''),aprendido:L(rc.aprendido).slice(0,8),puntajes:String(rc.puntajes||''),mejorar:L(rc.mejorar).slice(0,5),tareas:L(rc.tareas).slice(0,2),ai:aiCfg()};
  S.recaps=S.recaps||[];S.recaps.push(rec);if(S.recaps.length>60)S.recaps.shift();save();
  const box=document.getElementById('recapBox');if(box){box.removeAttribute('id');box.innerHTML=recapHTML(rec)+`<div class="row"><button class="pri" onclick="$('#pmodal').classList.remove('show');show('home')">🏠 Inicio</button><button onclick="$('#pmodal').classList.remove('show');show('stats')">📊 Ver historial</button></div>`}
- SESSION.items={};SESSION.phon={};SESSION.cors=[];SESSION.t0=Date.now();SESSION.xp0=null;SESSION.done=true;
+ SESSION.items={};SESSION.phon={};SESSION.cors=[];SESSION.conv=[];SESSION.t0=Date.now();SESSION.xp0=null;SESSION.done=true;
  await coachSay(`📝 ${esc(rec.resumen)}`,{es:rec.resumen+(rec.tareas.length?' Tus tareas para mañana: '+rec.tareas.join(' ')+'.':''),mood:'happy'})}
 function recapHTML(r){const li=a=>a.length?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'<p class="small mut">—</p>';
  return `<h3>📝 Resumen de la sesión · ${new Date(r.t).toLocaleDateString('es',{weekday:'long',day:'numeric',month:'short'})}</h3><p>${esc(r.resumen)}</p><div class="chips"><span>⏱️ ${r.min} min</span><span>⭐ +${r.xp} XP</span>${r.avg!=null?`<span>🎯 ${r.avg}/100</span>`:''}</div>${r.puntajes?`<p class="small">${esc(r.puntajes)}</p>`:''}
