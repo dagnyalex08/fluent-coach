@@ -10,6 +10,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<script>(function(){try{window.__gumT=performance.now();var md=navigator.mediaDevices;if(md&&md.getUserMedia){window.__micP=md.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}}).then(function(s){window.__micS=s;return s},function(e){window.__micE=e;return null})}}catch(e){}})();</script>
+<link rel="preload" href="vendor/speech-sdk.min.js" as="script">
 <title>Fluent Coach · Aprende a hablar inglés</title>
 <style>:root{--bg:#0f172a;--card:#1e293b;--card2:#273449;--tx:#e2e8f0;--mut:#94a3b8;--acc:#38bdf8;--ok:#22c55e;--bad:#ef4444;--mid:#f59e0b;--pur:#a78bfa}
 *{box-sizing:border-box}
@@ -249,7 +251,8 @@ const MIC={stream:null,src:null,proc:null,sink:null,level:0,idleT:null,
  async ensure(){clearTimeout(this.idleT);
   if(this.stream&&this.stream.getAudioTracks().some(t=>t.readyState==='live')){AUD.get();return}
   if(!this.supported())throw new Error('nomic');
-  this.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
+  let s0=null;if(window.__micP){s0=await window.__micP;window.__micP=null;if(s0&&!s0.getAudioTracks().some(t=>t.readyState==='live'))s0=null}
+  this.stream=s0||await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
   const c=AUD.get();this.src=c.createMediaStreamSource(this.stream);
   this.proc=c.createScriptProcessor(4096,1,1);const ratio=c.sampleRate/16000;
   this.proc.onaudioprocess=e=>{const inp=e.inputBuffer.getChannelData(0);let sq=0;for(let i=0;i<inp.length;i+=8)sq+=inp[i]*inp[i];this.level=Math.sqrt(sq/(inp.length/8));
@@ -644,9 +647,16 @@ const AZ={sdk:null,loading:null,cur:null,ttsCache:new Map(),ttsOff:0,
   const stop=()=>{if(stopped)return;stopped=true;clearInterval(wd);MIC.sink=null;try{push.close()}catch(e){}
    const end=()=>{try{rec.close()}catch(e){}this.cur=null;REC.active=false;AV().classList.remove('listening');setMicButtons(false);MIC.idle();const m=this.merge(segs);m.first=first;m.last=last;m.error=err;resolve(m)};
    setTimeout(()=>{try{rec.stopContinuousRecognitionAsync(end,end)}catch(e){end()}},400)};
-  this.cur={stop};REC.active=true;AV().classList.add('listening');setMicButtons(true);MIC.sink=b=>push.write(b);
+  this.cur={stop};REC.active=true;AV().classList.add('listening');setMicButtons(true);const cap=this.lastAudio=[];MIC.sink=b=>{try{cap.push(b.slice(0))}catch(e){}push.write(b)};
   rec.startContinuousRecognitionAsync(()=>{},e=>{err=String(e);stop()});
   return{stop,done}},
+ /* re-run recognition (+ optional scripted assessment) on captured PCM, e.g. against what he meant to say */
+ async assessBuf(bufs,ref,lang='en-US',{pa=true}={}){await this.load();const sdk=this.sdk;if(!bufs||!bufs.length)return{text:'',words:[],pa:{}};
+  const push=sdk.AudioInputStream.createPushStream(sdk.AudioStreamFormat.getWaveFormatPCM(16000,16,1));const cfg=this.speechConfig();cfg.speechRecognitionLanguage=lang;const rec=new sdk.SpeechRecognizer(cfg,sdk.AudioConfig.fromStreamInput(push));if(pa)this.paConfig(ref).applyTo(rec);
+  const segs=[];return new Promise(res=>{let done=false;const fin=()=>{if(done)return;done=true;clearTimeout(t);try{rec.close()}catch(e){}res(this.merge(segs))};const t=setTimeout(()=>{try{rec.stopContinuousRecognitionAsync(fin,fin)}catch(e){fin()}},20000);
+   rec.recognized=(s,e)=>{if(e.result.reason===sdk.ResultReason.RecognizedSpeech){const p=this.parse(e.result);if(p.text)segs.push(p)}};rec.canceled=()=>{try{rec.stopContinuousRecognitionAsync(fin,fin)}catch(e){fin()}};rec.sessionStopped=()=>{try{rec.stopContinuousRecognitionAsync(fin,fin)}catch(e){fin()}};
+   rec.startContinuousRecognitionAsync(()=>{bufs.forEach(b=>push.write(b.slice(0)));push.write(new ArrayBuffer(32000));push.close()},()=>fin())})},
+ warm(){if(!this.cfg())return;this.load().catch(()=>{});try{fetch(`https://${KEYS.azRegion.trim()}.api.cognitive.microsoft.com/sts/v1.0/issueToken`,{method:'POST',headers:{'Ocp-Apim-Subscription-Key':KEYS.azKey.trim()}}).catch(()=>{})}catch(e){}this.loadStyles&&this.loadStyles()},
  parse(r){const sdk=this.sdk;
   if(r.reason===sdk.ResultReason.NoMatch)return{nomatch:true,words:[],text:''};
   if(r.reason===sdk.ResultReason.Canceled){let d='';try{d=sdk.CancellationDetails.fromResult(r).errorDetails}catch(e){}return{error:d||'cancelado',words:[],text:''}}
@@ -656,11 +666,11 @@ const AZ={sdk:null,loading:null,cur:null,ttsCache:new Map(),ttsOff:0,
    return{w:w.Word,acc:a.AccuracyScore!=null?Math.round(a.AccuracyScore):null,err:a.ErrorType||'None',
     brk:fb.Break&&fb.Break.ErrorTypes||[],bl:fb.Break&&fb.Break.BreakLength?Math.round(fb.Break.BreakLength/1e4):0,into:fb.Intonation&&fb.Intonation.ErrorTypes||[],
     phon:(w.Phonemes||[]).map(p=>{const pa2=p.PronunciationAssessment||{};return{p:p.Phoneme,acc:Math.round(pa2.AccuracyScore||0),nb:(pa2.NBestPhonemes||[]).map(x=>({p:x.Phoneme,s:Math.round(x.Score)}))}})}});
-  return{text:j.DisplayText||r.text||'',words,dur:(j.Duration||r.duration||0)/1e4,
+  return{conf:nb.Confidence!=null?nb.Confidence:null,text:j.DisplayText||r.text||'',words,dur:(j.Duration||r.duration||0)/1e4,
    pa:{pron:rnd(pa.PronScore),acc:rnd(pa.AccuracyScore),flu:rnd(pa.FluencyScore),comp:rnd(pa.CompletenessScore),pros:rnd(pa.ProsodyScore)}}},
- merge(segs){const words=segs.flatMap(s=>s.words);const w=s=>Math.max(1,s.words.length);const tot=segs.reduce((a,s)=>a+w(s),0)||1;
+ merge(segs){const words=segs.flatMap((s,i)=>s.words.map(w=>Object.assign(w,{si:i})));const w=s=>Math.max(1,s.words.length);const tot=segs.reduce((a,s)=>a+w(s),0)||1;
   const avg=k=>{const v=segs.filter(s=>s.pa[k]!=null);if(!v.length)return null;return Math.round(v.reduce((a,s)=>a+s.pa[k]*w(s),0)/v.reduce((a,s)=>a+w(s),0))};
-  return{text:segs.map(s=>s.text).join(' ').trim(),words,segs:segs.length,pa:{pron:avg('pron'),acc:avg('acc'),flu:avg('flu'),comp:null,pros:avg('pros')},dur:segs.reduce((a,s)=>a+(s.dur||0),0)}},
+  const cs=segs.filter(s=>s.conf!=null);return{conf:cs.length?cs.reduce((a,s)=>a+s.conf*w(s),0)/cs.reduce((a,s)=>a+w(s),0):null,text:segs.map(s=>s.text).join(' ').trim(),words,segs:segs.length,pa:{pron:avg('pron'),acc:avg('acc'),flu:avg('flu'),comp:null,pros:avg('pros')},dur:segs.reduce((a,s)=>a+(s.dur||0),0)}},
  /* ---- Neural TTS (REST) ---- */
  vstyles:null,async loadStyles(){if(this.vstyles||this._vsl)return;this._vsl=1;this.vstyles={};try{const v=await fetch(`https://${KEYS.azRegion.trim()}.tts.speech.microsoft.com/cognitiveservices/voices/list`,{headers:{'Ocp-Apim-Subscription-Key':KEYS.azKey.trim()}});if(v.ok){const l=await v.json();const m={};(Array.isArray(l)?l:[]).forEach(x=>{if(x&&x.ShortName)m[x.ShortName]=x.StyleList||[]});this.vstyles=m}}catch(e){}},
  ssmlText(t){return esc(t).replace(/([.!?¿¡…])\s+/g,'$1 <break time="220ms"/> ').replace(/([,;:])\s+/g,'$1 <break time="90ms"/> ')},
@@ -1072,7 +1082,7 @@ function tutorSystem(mode,topic){const lvl=S.tests.length?S.tests[S.tests.length
   :`LANGUAGE RATIO "Más inglés": speak mostly in simple, natural English (short sentences). Use Spanish only for explanations of corrections, instructions and a short summary when something might be hard. Still give one useful English phrase to repeat in "practice".`;
  const m=mode==='free'?`TUTOR LIBRE — FRIEND ON A PHONE CALL. You are Sam, his bilingual buddy chatting with him on a call, NOT a teacher giving a lesson. Be casual and genuine: react like a real friend ("¡No manches, qué padre!", "Uy, qué estrés", "Jaja, me pasa igual"), share a tiny bit about yourself sometimes, and ask follow-up questions about HIS life (work, family, plans, what happened, how he felt). Talk mostly in relaxed Mexican Spanish and slip in natural English he can use for that situation ("ahí puedes decir: I'd like the chicken, please"); when it fits, contrast the very basic way with the more natural way, and offer to act out the situation (you play the waiter, the boss, the neighbor) if he wants. REMEMBER what he tells you this session (names, places, plans, problems) and bring it back naturally later.
 TOPICS: he can pick any topic. If he says he doesn't know, says "propónme algo", or the topic runs dry, PROPOSE 2 or 3 varied, concrete topics in one sentence (mix everyday life, his interests, a fun role-play), different from topics already offered, and let him choose.
-CORRECTIONS: at most ONE important correction per turn (grammar, tense, preposition or word choice), woven in lightly and kindly in Spanish inside your reply (e.g. "por cierto, se dice I went, no I go, porque fue ayer"), then put the correct phrase in "practice" so he can say it. If the app note says it already corrected his pronunciation this turn, do NOT add any correction (corrections: []). If his message just repeats a phrase you gave him, react warmly in a few words and keep the conversation going. NEVER use lesson or drill language (no "ejercicio", "lección", "práctica", "paso", "repite después de mí"), never mention scores, numbers or percentages.
+CORRECTIONS (the app speaks them for you, so do NOT put corrections inside "segments"): ALWAYS check what he said in English for grammar, word choice and naturalness. Report the single most important error in "fix". The transcript comes from speech recognition, so a mispronounced word may appear as a different real word (e.g. "I see the cheap" when he meant "ship"); use context to recover what he tried to say. Never mention scores or numbers, and never use lesson or drill words ("ejercicio", "lección", "práctica", "paso", "repite después de mí"). If his message just repeats a phrase he was given, react warmly in a few words and keep the conversation going (fix null).
 Keep every turn SHORT: 1 to 3 short sentences in total, like a quick phone chat, and end with a question or an invitation so the chat keeps flowing.${TU&&TU.mem&&TU.mem.length?`\nWhat you already know about him (refer back to it naturally): ${TU.mem.join('; ')}.`:''}${TU&&TU.offered&&TU.offered.length?`\nTopics already offered (offer different ones next time): ${TU.offered.slice(-9).join('; ')}.`:''}`
   :mode==='explain'?'EXPLAIN — the student wants you to explain a topic. Explain clearly and simply (concrete examples), check understanding, and teach the key English phrases for that topic.'
   :mode==='daily'?`DAILY LESSON — today's lesson phrase is "${topic}". He just practiced pronouncing it. Now hold a short, guided, beginner-friendly conversation in which you ask him easy questions that make him USE this phrase (and small variations). Give him model answers to repeat.`
@@ -1093,12 +1103,12 @@ ${slang}
 - Spanish-style phonetic respelling: read it like Spanish, mark the stressed syllable with an accent, and use: th = /θ/ (think), dh = /ð/ (this), sh = /ʃ/, ch = /tʃ/, dy = /dʒ/ (job = dyab), j = English h (house = jáus), y = /j/, v = real v, z = buzzing z, ii = long ee, uu = long oo, æ = cat vowel, er = /ɝ/, a = schwa or /ʌ/, flap t between vowels = r (water = uárer). Example: "How are you doing?" -> "jáu ar yu dúin?"
 - Return ONLY a JSON object with exactly these keys:
 {"segments":[{"lang":"es","text":"..."},{"lang":"en","text":"...","pr":"...","es":"..."}],"practice":{"en":"short English phrase for him to repeat now","pr":"respelling","es":"Spanish meaning"},"corrections":[{"original":"his wrong phrase","corrected":"correct phrase","corrected_pr":"respelling","explanation_es":"brief explanation in Spanish"}],"natural":{"text":"how a native would say his whole last message in English (null if already natural)","pr":"respelling","es":"Spanish meaning"},"vocab":[{"word":"useful English word or phrase","pr":"respelling","meaning_es":"meaning in Spanish"}],"pron_tips":[{"word":"","pr":"","tip_es":""}],"encouragement_es":"one short honest, motivating comment in Spanish"}
-Use empty arrays / null when there is nothing to report. Never break character, never mention JSON.${mode==='free'?' In this mode also add "memory":["short new facts he told you this turn, in Spanish"] and "topics_offered":["each topic you proposed this turn"], and keep "natural", "vocab" and "pron_tips" empty/null; "corrections" has at most 1 item.':''}`}
+Use empty arrays / null when there is nothing to report. Never break character, never mention JSON.${mode==='free'?' In this mode the JSON MUST start with these keys, in this order: "said": his sentence exactly as he TRIED to say it in English (keep his grammar mistakes, but replace words the recognizer misheard because of his accent; if he spoke Spanish, null), "fix": null or {"phrase":"his phrase as he said it","word":"the wrong word or spot","wrong":"what he said","correct":"what it should be","correct_phrase":"the whole corrected phrase","tip":"short reason in Spanish, spoken naturally","example":"another short English example with the same rule"}, "natural": {"text":"a more natural English way to say what he meant (if he spoke Spanish: how to say it in English)","es":"Spanish meaning"}. Then "segments", "memory":["short new facts he told you this turn, in Spanish"], "topics_offered":["each topic you proposed this turn"]. Keep "corrections" equal to the fix as [{"original":phrase,"corrected":correct_phrase,"explanation_es":tip}] or []; keep "vocab" and "pron_tips" empty.':''}`}
 /* normalize: older/other-shaped answers -> segments */
 function tuSegs(j){if(Array.isArray(j.segments)&&j.segments.length)return j.segments.filter(x=>x&&x.text);const o=[];if(j.reply)o.push({lang:'en',text:j.reply,pr:j.reply_pr||'',es:j.reply_es||''});if(j.followup&&typeof j.followup==='string'&&!(j.reply||'').includes(j.followup.slice(0,20)))o.push({lang:'en',text:j.followup,pr:'',es:''});return o}
 function tuPlain(j){return tuSegs(j).map(x=>x.text).join(' ')}
 let TU=null;
-const FREE_GREET=['¡Hola, Yonathan! Qué gusto que estés aquí. Hoy soy tu tutor libre: hablamos de lo que tú quieras.','¡Hey, Yonathan! Qué bueno verte. Aquí platicamos de lo que se te antoje y yo te ayudo con el inglés.','¡Hola! Me da mucho gusto platicar contigo otra vez. Hoy tú eliges el tema y yo te acompaño.','¡Qué tal, Yonathan! Listo para practicar sin presiones. Tú mandas hoy.'];
+const FREE_GREET=['¡Hola, '+uname()+'! Qué gusto que estés aquí. Hoy soy tu tutor libre: hablamos de lo que tú quieras.','¡Hey, '+uname()+'! Qué bueno verte. Aquí platicamos de lo que se te antoje y yo te ayudo con el inglés.','¡Hola! Me da mucho gusto platicar contigo otra vez. Hoy tú eliges el tema y yo te acompaño.','¡Qué tal, '+uname()+'! Listo para practicar sin presiones. Tú mandas hoy.'];
 const FREE_ASK='¿De qué quieres empezar a hablar hoy?';
 const FREE_POOL=['cómo pedir en un restaurante','tu trabajo y cómo te fue esta semana','un viaje que te gustaría hacer','tu comida favorita','una entrevista de trabajo, actuada','hablar con un vecino nuevo','ir al doctor','tu familia','fútbol y deportes','una película o serie que te guste','comprar ropa en una tienda','tus planes para el fin de semana','pedir direcciones en la calle','tu infancia','hacer amigos en Estados Unidos','llamar para hacer una cita','música que te gusta','qué harías con un día libre'];
 function freeTopics(n){S.freeIdx=(S.freeIdx||0);const out=[];for(let k=0;k<n;k++){out.push(FREE_POOL[(S.freeIdx+k*5)%FREE_POOL.length])}S.freeIdx=(S.freeIdx+1)%FREE_POOL.length;save();return out}
@@ -1181,6 +1191,8 @@ function renderSettings(){const st=S.settings,p=AI_PRESETS[KEYS.aiPreset]||AI_PR
  const voiceOpts=(list,cur)=>list.map(v=>`<option value="${esc(v.ShortName)}" ${v.ShortName===cur?'selected':''}>${esc(v.ShortName)} (${esc(v.Gender||'')})</option>`).join('');
  const enV=(S.azVoices||[]).filter(v=>/^en-US/.test(v.Locale)),esV=(S.azVoices||[]).filter(v=>/^es-(MX|US|CO|ES|AR)/.test(v.Locale));
  $('#v-settings').innerHTML=`<h2>⚙️ Ajustes</h2>
+ <div class="card"><label>Tu nombre (Sam te llama así)<input type="text" id="unameS" value="${esc(st.name||'Yonathan')}" autocomplete="given-name"></label>
+ <div class="small" id="diagV"><b>🩺 Diagnóstico de voz</b> · ${diagText()}</div></div>
  <div class="card"><h3>🔐 Tus claves</h3><p class="small">Se guardan <b>solo en este dispositivo</b> (localStorage del navegador) y se envían únicamente a Azure y al proveedor de IA que elijas. No hay servidor intermedio. Es adecuado para uso personal; no compartas este teléfono desbloqueado ni publiques la app con tus claves dentro. Puedes borrarlas cuando quieras. Exportar el progreso <b>no</b> incluye las claves.</p></div>
  <div class="card"><h3>🎯 Azure AI Speech (evaluación de fonemas + voz neural)</h3>
   <label>Clave (Key 1)<div class="row" style="flex-wrap:nowrap;margin:0"><input type="password" id="azKey" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(KEYS.azKey)}" placeholder="pega tu clave de Azure"><button class="sm" data-eye="azKey">👁️</button></div></label>
@@ -1242,13 +1254,17 @@ function renderSettings(){const st=S.settings,p=AI_PRESETS[KEYS.aiPreset]||AI_PR
  $('#azTts').onchange=e=>{st.azTts=e.target.checked;save()};
  $('#thr').oninput=e=>{st.threshold=+e.target.value;$('#thV').textContent=st.threshold;save()};
  $('#maxW').onchange=e=>{st.maxWord=Math.max(1,Math.min(10,+e.target.value||5));save()};$('#maxP').onchange=e=>{st.maxPhrase=Math.max(1,Math.min(6,+e.target.value||3));save()};
- $('#autoLoop').onchange=e=>{st.autoLoop=e.target.checked;save()};$('#tuDrillS').onchange=e=>{st.tuDrill=e.target.checked;save()};$('#callFreeS').onchange=e=>{st.callFree=e.target.checked;save()};$('#tuBargeS').onchange=e=>{st.tuBarge=e.target.checked;save()};$('#tuSlangS').onchange=e=>{st.tuSlang=e.target.checked;save()};bindMaterial();$('#autoListen').onchange=e=>{st.autoListen=e.target.checked;save()};$('#tuSil').onchange=e=>{st.tuSilence=+e.target.value;save()};$('#tuSpeakCor').onchange=e=>{st.tuSpeakCor=e.target.checked;save()};$('#coachLang').onchange=e=>{st.coachLang=e.target.value;save()};
+ $('#unameS').onchange=e=>{st.name=e.target.value.trim();save()};$('#autoLoop').onchange=e=>{st.autoLoop=e.target.checked;save()};$('#tuDrillS').onchange=e=>{st.tuDrill=e.target.checked;save()};$('#callFreeS').onchange=e=>{st.callFree=e.target.checked;save()};$('#tuBargeS').onchange=e=>{st.tuBarge=e.target.checked;save()};$('#tuSlangS').onchange=e=>{st.tuSlang=e.target.checked;save()};bindMaterial();$('#autoListen').onchange=e=>{st.autoListen=e.target.checked;save()};$('#tuSil').onchange=e=>{st.tuSilence=+e.target.value;save()};$('#tuSpeakCor').onchange=e=>{st.tuSpeakCor=e.target.checked;save()};$('#coachLang').onchange=e=>{st.coachLang=e.target.value;save()};
  $('#rate').oninput=e=>{st.rate=+e.target.value;$('#rateV').textContent=st.rate+'x';save()};$('#rate').onchange=()=>speak('Así sueno ahora en inglés:',{lang:'es'}).then(()=>speak('Hi Yonathan! This is my new speed.'));
  $('#optIpa').onchange=e=>{st.ipa=e.target.checked;save()};$('#optEs').onchange=e=>{st.es=e.target.checked;save()};$('#optCoachEs').onchange=e=>{st.coachEs=e.target.checked;save()};$('#goal').onchange=e=>{st.goal=Math.max(5,+e.target.value||15);save()};
  $('#btnExport').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='fluent-coach-progreso-'+todayKey()+'.json';a.click()};
  $('#fileImport').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const o=JSON.parse(t);if(!o.days)throw 0;localStorage.setItem(KEY,t);load();updateHeader();alert('Progreso importado.')}catch(x){alert('Archivo no válido.')}})};
  $('#btnDelKeys').onclick=()=>{if(confirm('¿Borrar las claves de Azure y de IA de este dispositivo?')){KEYS.azKey='';KEYS.aiKey='';saveKeys();renderSettings()}};
  $('#btnReset').onclick=()=>{if(confirm('¿Seguro? Se borrará todo tu progreso (las claves se conservan).')){localStorage.removeItem(KEY);load();updateHeader();show('home')}}}
+
+function diagText(){const d=S.diag;if(!d)return'Todavía no hay datos: habla en Tutor libre y vuelve aquí.';const p=d.pa||{},q=d.pa2||{};const f=x=>x==null?'–':x;
+ const mic=window.__micE?'micrófono bloqueado ('+esc(window.__micE.name||'error')+')':(MIC.stream||window.__micS?'micrófono permitido':'micrófono sin pedir');
+ return `${new Date(d.t).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})} · ${mic} · idioma detectado: ${d.lang==='es'?'español':'inglés'} · oído: «${esc(d.text||'')}»${d.lang==='es'&&d.en?` (en inglés se oyó «${esc(d.en)}»)`:''}${d.said?` · quiso decir: «${esc(d.said)}»`:''} · 1ª pasada pron ${f(p.pron)} / precisión ${f(p.acc)} / fluidez ${f(p.flu)} / prosodia ${f(p.pros)}${d.weak&&d.weak.length?' · más bajas: '+esc(d.weak.join('; ')):''}${d.pa2?` · 2ª pasada (con la frase que quiso decir) pron ${f(q.pron)} / precisión ${f(q.acc)}${d.weak2&&d.weak2.length?' · '+esc(d.weak2.join('; ')):''}`:''} · corrección IA: ${esc(d.fix||'—')}${d.err?' · error: '+esc(d.err):''}`}
 
 /* ================= Natural speech layer: friendly phoneme talk + TTS sanitizer ================= */
 /* PH_SAY[p] = [example word, friendly spoken description (no symbols, no jargon)] */
@@ -1673,6 +1689,22 @@ function exactLine(w,phrase,{praise=true}={}){const d=worstPh(w);const ph=(phras
  const where=ln?`${ln} de "${w.w}"`:`la palabra "${w.w}"`;
  return `${pr}${inPh?inPh.charAt(0).toLowerCase()+inPh.slice(1):''}te equivocaste en ${where}${sub?': '+sub:''}. ${art2} Dilo conmigo: "${/^i$/i.test(w.w)?'I':w.w}".`.replace(/^([a-zé])/,c=>c.toUpperCase())}
 function sentenceHL(words,T){T=T||S.settings.threshold||80;return words.filter(w=>w.err!=='Insertion').map(w=>(w.acc!=null&&w.acc<T)||w.err==='Omission'?wordHL(w,T):esc(/^i$/i.test(w.w)?'I':w.w)).join(' ')}
+/* ---- personalized, spoken coaching (name + phrase/word/letter + haz hincapié + sound + example + model) ---- */
+function uname(){return (S.settings.name||'').trim()||'Yonathan'}
+const SOUND_ES={'ʃ':'«sh», como cuando pides silencio','tʃ':'«ch», como en chile','θ':'una te suave con la lengua entre los dientes, sin voz','ð':'una de suave con la lengua entre los dientes, con voz','v':'una ve de verdad, con los dientes sobre el labio, que vibra; no es be','z':'una ese que zumba, con voz','s':'una ese normal','ɪ':'una i cortita, casi e','i':'una i larga: «ii»','aɪ':'«ai»','eɪ':'«ei»','oʊ':'«ou»','aʊ':'«au»','ɔɪ':'«oi»','æ':'algo entre a y e','ʌ':'una a cortita y relajada','ə':'una vocal muy suave, casi muda','ɑ':'una a bien abierta','ɔ':'una o abierta','ɛ':'una e cortita','ʊ':'una u cortita','u':'una u larga','ɹ':'una r inglesa, sin vibrar','ɚ':'«er» con la lengua hacia atrás','ɝ':'«er» con la lengua hacia atrás','h':'una jota muy suave, solo aire','ŋ':'una ene que se queda en la nariz, sin ge','w':'una u rapidita, como en huevo','j':'una i rapidita, como en hielo','dʒ':'una ye fuerte, como «dy»','ʒ':'una sh con voz','l':'una ele','t':'una te','d':'una de','k':'una ka con aire','p':'una pe con aire','b':'una be','g':'una ge suave, como en gato','f':'una efe','m':'una eme','n':'una ene'};
+const EX_ALT={'ʃ':['shoe','fish'],'tʃ':['chair','watch'],'θ':['three','bath'],'ð':['mother','this'],'v':['voice','love'],'z':['zoo','is'],'s':['sun','yes'],'ɪ':['sit','big'],'i':['see','tree'],'aɪ':['my','time'],'eɪ':['day','name'],'oʊ':['go','home'],'aʊ':['now','house'],'æ':['cat','apple'],'ʌ':['cup','love'],'ə':['about','banana'],'ɑ':['hot','father'],'ɛ':['bed','red'],'ʊ':['book','good'],'u':['food','blue'],'ɹ':['red','car'],'ɚ':['teacher','water'],'ɝ':['bird','work'],'h':['house','hello'],'ŋ':['sing','long'],'w':['water','we'],'j':['yes','you'],'dʒ':['job','orange'],'ʒ':['vision','usually'],'l':['love','ball'],'t':['time','cat'],'d':['dog','bed'],'k':['cat','book'],'p':['pen','stop'],'b':['boy','job'],'g':['go','big'],'f':['fish','off'],'m':['man','home'],'n':['no','sun']};
+function exWord(p,word){const lw=String(word||'').toLowerCase();const c=(EX_ALT[p]||[]).concat(phSay(p)?[phSay(p)[0]]:[]).find(x=>x&&x.toLowerCase()!==lw);return c||''}
+function coachLine(w,phrase){const N=uname();const nm=/^i$/i.test(w.w)?'I':w.w;const ph=(phrase||'').trim();const inPh=ph&&ph.split(/\s+/).length>1&&ph.toLowerCase()!==nm.toLowerCase()?` en la frase "${ph}"`:'';const d=worstPh(w);
+ if(w.err==='Omission'||!d)return{say:`${N}, no se escuchó la palabra "${nm}"${inPh}. Haz hincapié en decirla completa, sin comértela. Se dice así: "${nm}".`,ex:''};
+ const p=String(d.exp).replace(/[ːˈˌ]/g,'');const lt=letterOf(w,d);const ln=letterName(lt);const sub=substText(w,d);const ex=exWord(p,nm);
+ const art=/perdió el sonido del final/.test(sub)?'Termina la palabra marcando ese sonido final, cortito pero claro; no te lo comas.':(ART[p]||(phSay(p)?phSay(p)[1].replace(/^./,c=>c.toUpperCase())+'.':''));
+ const how=ln?`${ln} de "${nm}" suena como ${SOUND_ES[p]||'"'+(phSay(p)?phSay(p)[0]:p)+'"'}`:`el sonido de "${nm}"`;
+ return{say:`${N}, estás pronunciando mal la palabra "${nm}"${inPh}. Haz hincapié en este sonido: ${how}${sub?'; a ti '+sub:''}. ${art}${ex?` Es el mismo sonido que en "${ex}".`:''} Se dice así: "${nm}".`,ex,p,lt}}
+function fixLine(f){const N=uname();const ph=(f.phrase||'').trim(),cp=(f.correct_phrase||f.correct||'').trim();
+ return `${N}, en la frase "${ph}", en la palabra "${f.word||f.wrong}": dijiste "${f.wrong}", pero se dice "${f.correct}". Haz hincapié en esto: ${String(f.tip||'').replace(/[.\s]+$/,'')}.${f.example?` Otro ejemplo: "${f.example}".`:''} Se dice así: "${cp}".`}
+const ES_HINT=new Set('de la que el en y los se del las un por con no una su para es al lo como más pero sus le ya o fue este ha sí porque esta son cuando muy sin sobre también me hasta hay donde todo nos uno les ni eso esto qué yo otro él mucho nada ella mi mis tú te tu quiero ayer familia trabajo hoy bien gracias hola bueno pues entonces tengo estoy fui comimos vamos puedo creo hacer tiene ahora mañana porqué cómo dónde casa amigo amigos'.split(' '));
+function esScore(t){const w=String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').match(/[a-zñ]+/g)||[];if(!w.length)return 0;const set=new Set([...ES_HINT].map(x=>x.normalize('NFD').replace(/[\u0300-\u036f]/g,'')));return w.filter(x=>set.has(x)).length/w.length}
+function pronTargets(words,T){T=T||80;return (words||[]).filter(w=>w.err!=='Insertion'&&w.w&&w.w.replace(/[^a-z]/gi,'').length>1&&((w.acc!=null&&w.acc<T)||w.err==='Omission'||(w.phon||[]).some(p=>p.acc<60))).sort((a,b)=>(a.acc||0)-(b.acc||0))}
 
 /* ================= Conversation UI: call mode, state banner, streaming replies, exact correction drills ================= */
 const ST={listen:['🎤 Te escucho… habla ahora','Cuando termines, solo quédate callado un segundo.'],listenManual:['🎤 Te escucho… habla ahora','Toca aquí cuando termines.'],
@@ -1685,13 +1717,13 @@ function tuCallOn(){return !!(TU&&TU.call&&!TU.paused)}
 function tuRender(){const v=$('#v-tutor');if(TU.call==null)TU.call=TU.mode==='free'?true:S.settings.callOther===true;
  if(TU.mode==='free'){TU.call=true;v.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin:0">🧑‍🏫 Tutor libre</h2><a href="#" class="txtlink" id="tuEndF">Terminar</a></div><div id="tuLog"></div>
   <div id="tuBar" class="free"><div id="tuState" class="state" role="status" aria-live="polite"></div><div id="tuLive" class="small mut"></div>
-  <div class="row tuctl"><a href="#" class="txtlink" id="tuPauseF">Pausar</a><a href="#" class="txtlink" id="tuLangF"></a><a href="#" class="txtlink hide" id="tuKbF">⌨️ Prefiero escribir</a></div>
+  <div class="row tuctl"><a href="#" class="txtlink" id="tuPauseF">Pausar</a><a href="#" class="txtlink hide" id="tuKbF">⌨️ Prefiero escribir</a></div>
   <div class="row hide" id="tuType" style="flex-wrap:nowrap;margin:0"><input type="text" id="tuText" placeholder="Escribe tu mensaje…" enterkeyhint="send"><button class="pri" id="tuSendB">Enviar</button></div></div>`;
   const log=$('#tuLog');TU.turns.forEach(t=>log.insertAdjacentHTML('beforeend',tuTurnHTML(t)));const pv=e=>e&&e.preventDefault();
-  const langLbl=()=>$('#tuLangF').textContent=S.settings.tuInLang==='es'?'Hablo en español':'Hablo en inglés';langLbl();
+  
   $('#tuEndF').onclick=e=>{pv(e);tuEnd()};
   $('#tuPauseF').onclick=e=>{pv(e);AUD.unlock();if(TU.st==='paused'||TU.st==='idle'||TU.st==='noHear'){TU.paused=false;tuListen()}else{TU.paused=true;TU.stopSpeak=true;if(TU.ctl){TU.ignoreNext=true;TU.ctl.stop()}if(LOOP)LOOP.stop=true;AZ.stop();stopAudio();TTS&&TTS.cancel();setTimeout(()=>tuState('paused'),450)}};
-  $('#tuLangF').onclick=e=>{pv(e);S.settings.tuInLang=S.settings.tuInLang==='es'?'en':'es';save();langLbl()};
+  
   $('#tuKbF').onclick=e=>{pv(e);$('#tuType').classList.toggle('hide');if(!$('#tuType').classList.contains('hide'))$('#tuText').focus()};
   $('#tuSendB').onclick=()=>{const t=$('#tuText').value.trim();if(!t)return;$('#tuText').value='';$('#tuType').classList.add('hide');TU.paused=false;tuSend(t)};
   $('#tuText').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#tuSendB').click()}};
@@ -1718,15 +1750,19 @@ function tuStateTap(){if(!TU)return;const k=TU.st;AUD.unlock();
  if(k==='think'||k==='sound')return;TU.paused=false;tuListen()}
 const tuMic=()=>tuStateTap();
 /* one listening turn; resolves when the user's turn is sent (or nothing heard) */
-async function tuListen(){if(!TU||TU.busy||TU.ctl||TU.drilling)return;TU.stopSpeak=true;stopAudio();TTS&&TTS.cancel();TU.paused=false;const lng=S.settings.tuInLang==='es'?'es-MX':'en-US';const call=tuCallOn();
+async function tuListen(){if(!TU||TU.busy||TU.ctl||TU.drilling)return;TU.stopSpeak=true;stopAudio();TTS&&TTS.cancel();TU.paused=false;const FREE=TU.mode==='free';const lng=FREE?'en-US':S.settings.tuInLang==='es'?'es-MX':'en-US';const call=tuCallOn();
  const live=t=>{const e=$('#tuLive');if(e)e.textContent=t?'🗣️ '+t:''};
  if(AZ.cfg()&&MIC.supported()){try{tuState(call?'listen':'listenManual');
    TU.ctl=await AZ.free({onText:live,silenceMs:call?1200:(S.settings.tuSilence||0),idleMs:call?15000:0,lang:lng});
-   const r=await TU.ctl.done;TU.ctl=null;live('');if(!TU)return;if(TU.ignoreNext){TU.ignoreNext=false;return}
+   let r=await TU.ctl.done;TU.ctl=null;live('');if(!TU)return;if(TU.ignoreNext){TU.ignoreNext=false;return}
+   let ulang='en';const audio=AZ.lastAudio||[];const r1text=r.text,r1conf=r.conf!=null?Math.round(r.conf*100):null;
+   /* Tutor libre: always assess English; detect Spanish (heuristic on the English pass) and re-recognize the same audio in es-MX */
+   if(FREE&&audio.length&&(esScore(r.text)>=0.2||(!r.text&&r.first)||(r.conf!=null&&r.conf<0.8)||(r.pa.pron!=null&&r.pa.pron<55))){tuState('think');try{const r2=await AZ.assessBuf(audio,'','es-MX',{pa:false});if(r2.text&&esScore(r2.text)>=0.25&&(r.conf==null||!r.text||(r2.conf||0)>r.conf+0.08)){ulang='es';r=Object.assign({},r,{text:r2.text,words:[],pa:{}})}}catch(e){console.warn('es pass',e)}}
+   S.diag={t:Date.now(),lang:ulang,text:r.text,en:r1text,conf:r1conf,pa:r.pa||{},weak:(r.words||[]).filter(w=>w.acc!=null).sort((a,b)=>a.acc-b.acc).slice(0,4).map(w=>w.w+' '+w.acc+((w.phon||[]).some(p=>p.acc<60)?' ('+(w.phon||[]).filter(p=>p.acc<60).map(p=>p.p+' '+p.acc).join(', ')+')':'')),err:r.error||''};save();
    if(r.error&&!r.text){tuState('noHear');coachSay(azErr(r),{mood:'concern'});return}if(!r.text){if(TU.mode==='free'){TU.paused=true}tuState('noHear');return}
    phStat(r.words);if(r.pa.pron!=null&&r.words.length){TU.pron.push(r.pa.pron);const t=today();t.att++;t.sum+=r.pa.pron;S.hist=S.hist||[];S.hist.push([Date.now(),r.pa.pron])}
    const ms=r.first&&r.last?r.last-r.first+1200:0;const a=analyzeSpeech(r.text,ms);if(a.wpm&&a.n>=8)S.wpm.push([Date.now(),a.wpm]);save();
-   tuSend(r.text,{pa:r.words.length?r:null})}catch(e){TU.ctl=null;tuState('idle');micFail(e)}return}
+   tuSend(r.text,{pa:r.words&&r.words.length?r:null,audio:FREE&&ulang==='en'?audio:null,ulang})}catch(e){TU.ctl=null;tuState('idle');micFail(e)}return}
  if(canListen()){tuState(call?'listen':'listenManual');let last=Date.now(),txt='';TU.ctl=listenLong(t=>{txt=t;last=Date.now();live(t)});const ctl=TU.ctl;
   const wd=call?setInterval(()=>{if(txt&&Date.now()-last>1500)ctl.stop()},300):null;const r=await ctl.done;clearInterval(wd);TU.ctl=null;live('');if(!TU)return;if(TU.ignoreNext){TU.ignoreNext=false;return}
   if(r.text)tuSend(r.text);else tuState('noHear');return}
@@ -1742,7 +1778,7 @@ function tuUserHTML0(t){if(!t.pa)return `<div class="msg me"><div>${esc(t.text)}
  const line=allW?W.map(w=>(w.acc!=null&&w.acc<T)||w.err==='Omission'?wordHL(w,T):esc(w.w)).join(' '):esc(t.text);
  return `<div class="msg me"><div>${line}</div>${t.verdict?`<div class="small">💬 ${esc(t.verdict)}</div>`:''}${paQuiet(t.pa.pa)}${t.ptip?`<div class="small">${t.ptip}</div>`:''}<details class="small"><summary>Ver detalle</summary>${renderPA(t.pa,{expandWeak:2})}</details></div>`}
 
-async function tuSend(text,{pa,opening}={}){if(!TU||TU.busy)return;if(TU.mode==='free'&&!TU.topic&&!opening){TU.topic=String(text).slice(0,60);const fi=$('#freeIdeas');if(fi)fi.remove()}
+async function tuSend(text,{pa,opening,audio,ulang}={}){if(!TU||TU.busy)return;if(TU.mode==='free'&&!opening)return tuSendFree(text,{pa,audio,ulang});if(TU.mode==='free'&&!TU.topic&&!opening){TU.topic=String(text).slice(0,60);const fi=$('#freeIdeas');if(fi)fi.remove()}
  TU.busy=true;TU.stopSpeak=false;TU.barge=false;const log=$('#tuLog');let ut=null;const FREE=TU.mode==='free';const ptip=pa?prosodyTip(pa,text):null;
  if(!opening){ut={role:'user',text,pa:pa||null,verdict:pa&&!FREE?verdict(pa.pa):'',ptip:ptip&&!FREE?ptip.html:''};TU.turns.push(ut);log.insertAdjacentHTML('beforeend',tuTurnHTML(ut))}
  let content=opening?`(The student opened the session. Their request/topic: "${text}". Greet him briefly in Spanish and start.)`:`Student said${pa?' (speech transcript)':' (typed)'}: "${text}"`;
@@ -1839,19 +1875,21 @@ async function tuMisDrill(cor){const T=S.settings.threshold||80,maxP=Math.min(3,
  }finally{LOOP=null;if(TU)TU.drilling=false}
  box.innerHTML=`<div class="small">${ok?'✅':'🔁'} ${esc(c.corrected)}</div>`;return true}
 /* ---------- Tutor libre: one light, precise correction (voice only, no buttons) ---------- */
-async function tuFreeFix(pa,text,w0){if(!w0)return null;const T=S.settings.threshold||80;const W=pa.words.filter(w=>w.err!=='Insertion'&&w.w);const i=W.indexOf(w0);
+async function tuModel(t){await tuSay(t,{rate:0.7});await sleep(180);await tuSay(t,{rate:Math.max(0.85,S.settings.rate||0.95)})}
+/* Tutor libre pronunciation fix: spoken, personalized, voice-only */
+async function tuFreeFix(pa,text,w0){if(!w0)return null;const T=S.settings.threshold||80;const W=pa.words.filter(w=>w.err!=='Insertion'&&w.w&&(w0.si==null||w.si===w0.si));const i=W.indexOf(w0);
  const nm=x=>/^i$/i.test(x.w)?'I':x.w;const phrase=(W.length<=8?W:W.slice(Math.max(0,i-3),i+4)).map(nm).join(' ');
- const log=$('#tuLog');log.insertAdjacentHTML('beforeend','<div class="msg sam drill free"><div class="dbox"></div></div>');const box=log.lastElementChild.querySelector('.dbox');
- const d=worstPh(w0);const lt=d?letterOf(w0,d):'';const tip=d&&ART[d.exp]?ART[d.exp]:'';
- box.innerHTML=`<div class="en hlsent">${sentenceHL(W,T)}</div>${lt?`<div class="small">En <b>${esc(w0.w)}</b>: la <b class="lbad">${esc(lt)}</b>${d.heard&&SUBN[d.heard]?' · te salió como '+esc(SUBN[d.heard]):''}</div>`:''}${tip?`<div class="small">👄 ${esc(tip)}</div>`:''}<div class="small mut dres"></div>`;box.scrollIntoView({behavior:'smooth',block:'end'});
+ const log=$('#tuLog');log.insertAdjacentHTML('beforeend','<div class="msg sam drill free fixcard"><div class="dbox"></div></div>');const box=log.lastElementChild.querySelector('.dbox');
+ const d=worstPh(w0);const cl=coachLine(w0,phrase);const lt=cl.lt||'';const tip=d&&ART[d.exp]?ART[d.exp]:'';
+ box.innerHTML=`<div class="small mut">🗣️ Pronunciación</div><div class="en hlsent">${sentenceHL(W,T)}</div>${lt?`<div class="small">En <b>${esc(w0.w)}</b>: la <b class="lbad">${esc(lt)}</b> suena como ${esc(SOUND_ES[d.exp]||'')}${d.heard&&SUBN[d.heard]?' · te salió como '+esc(SUBN[d.heard]):''}</div>`:''}${tip?`<div class="small">👄 ${esc(tip)}</div>`:''}${cl.ex?`<div class="small">🔁 Mismo sonido: <b class="en">${esc(cl.ex)}</b></div>`:''}<div class="small mut dres"></div>`;box.scrollIntoView({behavior:'smooth',block:'end'});
  LOOP={};TU.drilling=true;let ok=false;const stop=()=>!LOOP||LOOP.stop||!TU;
- try{await tuSay(exactLine(w0,phrase),{lang:'es',force:true});if(stop())return{any:true};
-  if(d&&lt&&AZ.cfg()){await tuSay(lt,{ph:d.exp});await new Promise(r=>setTimeout(r,200))}await tuSay(nm(w0),{rate:0.8});
+ try{await tuSay(cl.say,{lang:'es',force:true});if(stop())return{any:true};
+  if(d&&lt&&AZ.cfg()){await tuSay(lt,{ph:d.exp});await sleep(200)}await tuModel(nm(w0));await tuSay('Ahora tú.',{lang:'es'});
   for(let k=0;k<3&&!stop();k++){let r;try{r=await dListen(nm(w0),6000)}catch(e){micFail(e);break}if(stop())break;
    if(r.error||!r.words.length){await tuSay(pick(['No te escuché, otra vez:','¿Mande? Otra vez:']),{lang:'es'});await tuSay(nm(w0),{rate:0.8});continue}
    const ww=r.words.find(x=>x.err!=='Insertion')||r.words[0];if(!ww||ww.acc==null)continue;phStat([ww]);sessAdd({en:w0.w,es:'Palabra corregida en conversación'},ww.acc);
    box.querySelector('.dres').innerHTML=`Tú: <span class="en">${wordHL(ww,T)}</span>`;
-   if(ww.acc>=T){ok=true;addXP(3);mood('happy');await tuSay(pick(['¡Eso!','¡Así mero!','¡Ahora sí!','¡Perfecto!']),{lang:'es'});break}
+   if(ww.acc>=T&&!(ww.phon||[]).some(p=>p.acc<60)){ok=true;addXP(3);mood('happy');await tuSay(pick(['¡Eso, '+uname()+'!','¡Así mero!','¡Ahora sí!','¡Perfecto!']),{lang:'es'});break}
    const d2=worstPh(ww);const sub=d2?substText(ww,d2):'';await tuSay((sub?pick(['Todavía','Aún'])+' '+sub+'. ':pick(['Casi.','Ya casi.'])+' ')+(d2&&ART[d2.exp]&&k===1?ART[d2.exp]+' ':'')+pick(['Otra vez:','Una más:']),{lang:'es'});await tuSay(nm(w0),{rate:0.8})}
   if(ok&&!stop()&&phrase.split(' ').length>1){await tuSay(pick(['Ahora toda la frase:','Y ahora en la frase:']),{lang:'es'});await tuSay(phrase,{rate:0.9});
    for(let k=0;k<2&&!stop();k++){let r;try{r=await dListen(phrase,9000)}catch(e){break}if(stop()||r.error||!r.words.length)break;recordPA({id:'c_'+hash(phrase),en:phrase,es:''},r,{noAutoSrs:true,quiet:true});
@@ -1860,6 +1898,53 @@ async function tuFreeFix(pa,text,w0){if(!w0)return null;const T=S.settings.thres
     const wk=r.words.filter(x=>x.err!=='Insertion'&&x.acc!=null).sort((a,b)=>a.acc-b.acc)[0];if(k===0){await tuSay(wk&&wk.acc<T?`Casi. Cuida "${nm(wk)}". Otra vez:`:'Casi. Otra vez:',{lang:'es'});await tuSay(phrase,{rate:0.9})}else await tuSay('Va mejorando, lo seguimos practicando platicando.',{lang:'es'})}}
   if(!ok&&!stop()){srsAdd({id:'w_'+w0.w.toLowerCase(),en:w0.w,pr:phRespell(w0.phon||[]),es:'Palabra difícil (pronunciación)',ipa:'/'+(w0.phon||[]).map(x=>x.p).join('')+'/'},true);await tuSay(pick(['No pasa nada, la seguimos practicando luego.','Tranqui, luego la repasamos.']),{lang:'es'})}
  }finally{LOOP=null;if(TU)TU.drilling=false}return{any:true,ok}}
+/* Tutor libre grammar / word-choice fix from the LLM: spoken, personalized, model + auto-mic retry */
+async function tuGramFix(f){const T=S.settings.threshold||80;const cp=(f.correct_phrase||f.correct||'').trim();if(!cp)return;const log=$('#tuLog');
+ log.insertAdjacentHTML('beforeend',`<div class="msg sam drill free fixcard"><div class="dbox"><div class="small mut">✏️ Gramática y palabras</div><div class="small">Dijiste: <s>${esc(f.phrase||f.wrong||'')}</s></div><div class="en hlsent">${esc(cp)}</div><div class="small">«${esc(f.wrong||'')}» → <b>${esc(f.correct||'')}</b> · ${esc(f.tip||'')}</div>${f.example?`<div class="small">🔁 Otro ejemplo: <b class="en">${esc(f.example)}</b></div>`:''}<div class="small mut dres"></div></div></div>`);
+ const box=log.lastElementChild.querySelector('.dbox');box.scrollIntoView({behavior:'smooth',block:'end'});LOOP={};TU.drilling=true;const stop=()=>!LOOP||LOOP.stop||!TU;
+ try{await tuSay(fixLine(f),{lang:'es',force:true});if(stop())return;await tuModel(cp);await tuSay('Ahora tú.',{lang:'es'});
+  if(!AZ.cfg()||!MIC.supported())return;
+  for(let k=0;k<2&&!stop();k++){let r;try{r=await dListen(cp,9000)}catch(e){micFail(e);break}if(stop())break;if(r.error||!r.words.length){await tuSay('No te escuché. Otra vez:',{lang:'es'});await tuSay(cp,{rate:0.85});continue}
+   box.querySelector('.dres').innerHTML=`Tú: <span class="en">${sentenceHL(r.words,T)}</span>`;recordPA({id:'c_'+hash(cp),en:cp,es:''},r,{noAutoSrs:true,quiet:true});
+   const miss=r.words.filter(w=>w.err==='Omission'||(w.acc!=null&&w.acc<T));if(paGood(r,T)||!miss.length){addXP(3);await tuSay(pick(['¡Eso, '+uname()+'! Así se dice.','¡Perfecto, así mero!']),{lang:'es'});break}
+   await tuSay(k===0?`Casi. ${miss[0].err==='Omission'?`Te faltó "${miss[0].w}".`:`Cuida "${miss[0].w}".`} Otra vez:`:'Va mejorando, seguimos.',{lang:'es'});if(k===0)await tuSay(cp,{rate:0.85})}
+ }finally{LOOP=null;if(TU)TU.drilling=false}}
+/* Tutor libre turn: LLM always checks the transcript; precise pronunciation from a 2nd scripted pass on the same audio */
+async function tuSendFree(text,{pa,audio,ulang}={}){TU.busy=true;TU.stopSpeak=false;const log=$('#tuLog');const T=S.settings.threshold||80;if(!TU.topic)TU.topic=String(text).slice(0,60);
+ const ut={role:'user',text,pa:pa||null,verdict:'',ptip:''};TU.turns.push(ut);log.insertAdjacentHTML('beforeend',tuTurnHTML(ut));
+ let content=`Student said (${pa||audio?'speech transcript':'typed'}${ulang==='es'?', in Spanish':''}): "${text}"`;
+ if(pa){content+=`\nPronunciation assessment (Azure, 0-100): overall ${pa.pa.pron}, accuracy ${pa.pa.acc}, fluency ${pa.pa.flu}${pa.pa.pros!=null?', prosody '+pa.pa.pros:''}. Words: ${pa.words.filter(w=>w.acc!=null).map(w=>{const d=worstPh(w);return w.w+' '+w.acc+(d&&d.acc<60?` (/${d.exp}/ ${d.acc}${d.heard?' sounded like /'+d.heard+'/':''})`:'')}).join(', ')}. The app handles pronunciation itself; your "fix" is for grammar, word choice or naturalness.`}
+ content+=`\nCheck his sentence now and return "said", "fix" (or null) and "natural" first.`;TU.msgs.push({role:'user',content});
+ log.insertAdjacentHTML('beforeend','<div class="msg sam typing" id="tuTyping">⏳ Sam está pensando…</div>');log.lastElementChild.scrollIntoView({behavior:'smooth',block:'end'});tuState('think');
+ let j,e;try{j=await aiChat([{role:'system',content:tutorSystem(TU.mode,TU.topic)},...tuTrim()],{maxTokens:900})}catch(x){e=x}if(!TU)return;$('#tuTyping')&&$('#tuTyping').remove();
+ if(e){TU.msgs.pop();TU.busy=false;tuState('paused');TU.paused=true;log.insertAdjacentHTML('beforeend',`<div class="warn">⚠️ ${esc(e.message||e)}</div>`);await tuSay('Perdón, se me fue la señal. Toca Seguir y lo intentamos otra vez.',{lang:'es'});tuState('paused');return}
+ if(!tuSegs(j).length)j.segments=[{lang:'es',text:'¿Me lo repites?'}];
+ /* second, scripted pass against what he TRIED to say -> catches mispronounced words the recognizer turned into other words */
+ if(!TU)return;let pa2=null;const said=typeof j.said==='string'?j.said.trim():'';
+ if(audio&&audio.length&&said&&AZ.cfg()){try{const r2=await AZ.assessBuf(audio,said,'en-US');if(r2.words&&r2.words.length)pa2=r2}catch(x){console.warn('pass2',x)}}
+ if(!TU)return;const P=pa2||pa;let pron=P?pronTargets(P.words,T).filter(w=>!(P===pa2&&w.err==='Omission'&&j.fix&&j.fix.correct&&String(j.fix.correct).toLowerCase().includes(w.w.toLowerCase()))):[];
+ if(P===pa2&&pron.length===0&&pa)pron=pronTargets(pa.words,T);
+ if(S.diag){S.diag.said=said;S.diag.pa2=pa2?pa2.pa:null;S.diag.weak2=pa2?pa2.words.filter(w=>w.acc!=null).sort((a,b)=>a.acc-b.acc).slice(0,4).map(w=>w.w+' '+w.acc+(w.err!=='None'?' '+w.err:'')):[];S.diag.fix=j.fix?(j.fix.wrong+' → '+j.fix.correct):'—';save()}
+ if(P&&P!==ut.pa){ut.pa=P;const el=log.querySelectorAll('.msg.me');const last=el[el.length-1];if(last)last.outerHTML=tuTurnHTML(ut)}
+ const fx=j.fix&&j.fix.correct&&j.fix.wrong&&String(j.fix.wrong).toLowerCase()!==String(j.fix.correct).toLowerCase()?j.fix:null;
+ TU.msgs.push({role:'assistant',content:tuSegs(j).map(x=>`[${x.lang}] ${x.text}`).join(' ')+(fx?` [fix] ${fx.correct_phrase||fx.correct}`:'')});
+ if(Array.isArray(j.memory)){TU.mem=TU.mem||[];j.memory.filter(x=>typeof x==='string'&&x.trim()).forEach(x=>{if(!TU.mem.includes(x))TU.mem.push(x)});TU.mem=TU.mem.slice(-15)}
+ if(Array.isArray(j.topics_offered)){TU.offered=TU.offered||[];TU.offered.push(...j.topics_offered.filter(x=>typeof x==='string'))}
+ const cor=fx?[{original:fx.phrase||fx.wrong,corrected:fx.correct_phrase||fx.correct,explanation_es:fx.tip||''}]:[];j.corrections=cor;
+ cor.forEach(c=>{srsAdd({id:'c_'+hash(c.corrected),en:c.corrected,pr:'',es:'Corrección: '+(c.explanation_es||'')},true);SESSION.cors.push(c)});
+ S.tutor=S.tutor||{turns:0,mistakes:0,sessions:0};S.tutor.turns++;S.tutor.mistakes+=cor.length+(pron.length?1:0);today().conv++;addXP(8);
+ const nat=j.natural&&j.natural.text?String(j.natural.text).trim():'';
+ /* 1) corrections, always spoken */
+ if(TU&&!TU.stopSpeak&&fx)await tuGramFix(fx);
+ if(TU&&!TU.stopSpeak&&pron.length&&P)await tuFreeFix(P,text,pron[0]);
+ if(TU&&!TU.stopSpeak&&!fx&&!pron.length){
+  if(ulang==='es'&&nat){log.insertAdjacentHTML('beforeend',`<div class="msg sam drill free fixcard"><div class="dbox"><div class="small mut">🇺🇸 En inglés</div><div class="en hlsent">${esc(nat)}</div></div></div>`);await tuSay(`${uname()}, en inglés eso se dice así:`,{lang:'es'});await tuModel(nat)}
+  else{log.insertAdjacentHTML('beforeend',`<div class="msg sam drill free fixcard ok"><div class="dbox"><div class="small">✅ ¡Bien dicho!</div>${nat&&nat.toLowerCase().replace(/[^a-z ]/g,'')!==String(text).toLowerCase().replace(/[^a-z ]/g,'')?`<div class="small">✨ Más natural: <b class="en">${esc(nat)}</b></div>`:''}</div></div>`);
+   if(nat&&nat.toLowerCase().replace(/[^a-z ]/g,'')!==String(text).toLowerCase().replace(/[^a-z ]/g,'')){await tuSay(pick([`¡Bien dicho, ${uname()}! Más natural sería:`,`Se entendió perfecto, ${uname()}. Un nativo diría:`]),{lang:'es'});await tuSay(nat,{rate:0.9})}else await tuSay(pick([`¡Bien dicho, ${uname()}!`,'¡Perfecto!']),{lang:'es'})}}
+ /* 2) Sam's reply */
+ if(!TU)return;const st={role:'sam',j,opening:false};TU.turns.push(st);log.insertAdjacentHTML('beforeend',tuTurnHTML(st));log.lastElementChild.scrollIntoView({behavior:'smooth',block:'end'});S.tutorCur=tuSerialize();save();
+ if(TU&&!TU.stopSpeak){if(fx||pron.length)await tuSay(pick(['Bueno,','Oye,','Y bueno,']),{lang:'es'});await tuSpeakSegs(j)}
+ if(TU){TU.busy=false;tuAfterSpeak()}}
 async function tuFreeProsody(pt){if(!pt||!pt.chunk)return;LOOP={};TU.drilling=true;try{await tuSay(pt.say.replace(/Escúchame:$/,'Escucha:'),{lang:'es',force:true});await tuSay(pt.chunk,{mark:pt.mark,rate:0.9});await tuSay(pick(['Dilo conmigo.','A ver tú.']),{lang:'es'});
  const r=await dListen(pt.chunk,9000);if(r&&!r.error&&r.words.length){const p2=prosodyTip(r,pt.chunk);await tuSay(!p2||p2.kind!==pt.kind?pick(['¡Mucho mejor, así suena natural!','¡Eso!']):pick(['Va mejorando.','Ya casi.']),{lang:'es'})}}catch(e){}finally{LOOP=null;if(TU)TU.drilling=false}}
 
@@ -1985,6 +2070,7 @@ function startScreen(){const t=dailyToday();const ov=$('#startOv');
 function homeDailyHTML(){const t=dailyToday();const it=itemOf(t);
  return `<div class="card daily-hero"><div class="row" style="justify-content:space-between;margin:0"><b>📅 Lección del día</b>${t&&t.done?'<span>✅ hecha</span>':''}</div>${it?`<div class="en">${esc(it.en)}</div><div class="es">${esc(it.es)}</div>`:''}<div class="row"><button class="pri big" onclick="runDaily(${t&&t.done?'true':''})">${t&&t.done?'➕ Otra frase':'▶ Empezar lección'}</button>${Object.keys(SESSION.items).length||SESSION.cors.length?`<button onclick="endSession('#v-home')">🏁 Terminar sesión</button>`:''}</div></div>`}
 
+AZ.warm();
 banner();initSettings();updateHeader();{const h=location.hash.slice(1);show(document.getElementById('v-'+h)&&h!=='daily'?h:'home')}
 startScreen();
 if(TTS)setTimeout(loadVoices,500);
@@ -1995,6 +2081,6 @@ if('serviceWorker' in navigator&&window.isSecureContext&&location.protocol!=='fi
  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{const up=()=>reg.update().catch(()=>{});up();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')up()})}).catch(e=>console.warn('SW',e)))}
 window.addEventListener('pagehide',()=>{try{MIC.release()}catch(e){}});
 $('#pmClose').onclick=()=>{if(LOOP){LOOP.stop=true}AZ.stop();stopAudio();$('#pmodal').classList.remove('show')};
-if(AZ.cfg())setTimeout(()=>AZ.load().catch(()=>{}),1500);
+
 
 </script></body></html>
