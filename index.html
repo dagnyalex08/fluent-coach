@@ -143,6 +143,12 @@ details{margin:.5rem 0}summary{cursor:pointer;color:var(--acc);font-weight:600;p
 @media (display-mode: standalone){#banner .warn{font-size:.82rem}}
 #bubbleText{max-height:7.5em;overflow:auto}@media (max-width:600px){#bubbleText{max-height:5.2em}}
 .big2{font-size:1.6rem;font-weight:800}.daily-hero{border:2px solid var(--acc)}.sp-es{margin:.3rem 0;font-size:1.02rem}.seg-en{background:#0f172a;border-radius:10px;padding:.45rem .6rem;margin:.35rem 0}.fbx.practice{border:2px solid var(--pur)}.recap ul{margin:.2rem 0 .5rem;padding-left:1.2rem}.modal.start{z-index:60;background:#0f172af2}.modal.start .card{max-width:420px}
+
+.chk{display:flex;gap:.5rem;align-items:center;margin:.35rem 0}.chk input{width:auto}
+.msg.drill{border-left:4px solid var(--acc)}
+.matlist{list-style:none;padding:0}.matlist li{padding:.45rem 0;border-bottom:1px solid #ffffff14;word-break:break-word}.matlist li button{float:right}
+#irTab{width:100%;border-collapse:collapse;font-size:.9rem}#irTab td,#irTab th{padding:.3rem;border-bottom:1px solid #ffffff14;text-align:left}
+.card.focus{outline:2px solid var(--acc)}
 </style></head><body>
 <header class="top">
   <div class="brand">🗽 Fluent Coach</div>
@@ -174,6 +180,7 @@ details{margin:.5rem 0}summary{cursor:pointer;color:var(--acc);font-weight:600;p
 <nav id="tabs">
   <button data-tab="home" class="act">🏠 Inicio</button>
   <button data-tab="daily">📅 Hoy</button>
+  <button data-tab="gram">📘 Gramática</button>
   <button data-tab="tutor">🤖 Tutor IA</button>
   <button data-tab="pron">🎯 Pronunciar</button>
   <button data-tab="lessons">🎭 Lecciones</button>
@@ -185,11 +192,14 @@ details{margin:.5rem 0}summary{cursor:pointer;color:var(--acc);font-weight:600;p
   <button data-tab="test">📝 Evaluación</button>
   <button data-tab="stats">📊 Estadísticas</button>
   <button data-tab="method">🔬 Método</button>
+  <button data-tab="slang">🗽 Slang</button>
   <button data-tab="settings">⚙️ Ajustes</button>
 </nav>
 <main>
  <section class="view act" id="v-home"></section>
  <section class="view" id="v-daily"></section>
+ <section class="view" id="v-gram"></section>
+ <section class="view" id="v-slang"></section>
  <section class="view" id="v-tutor"></section>
  <section class="view" id="v-pron"></section>
  <section class="view" id="v-settings"></section>
@@ -283,9 +293,12 @@ function voiceFor(lang){const pref=lang==='es'?S.settings.voiceEs:S.settings.voi
  return voices.find(v=>/en[-_]US/i.test(v.lang)&&/Google|Samantha|Aria|Jenny|Natural/i.test(v.name))||voices.find(v=>/en[-_]US/i.test(v.lang))||voices.find(v=>/^en/i.test(v.lang))}
 const AV=()=>$('#avatar')||document.createElement('div');
 function mood(m){const a=AV();a.classList.remove('happy','concern');if(m)a.classList.add(m);if(m)setTimeout(()=>a.classList.remove(m),3500)}
-async function speak(text,o={}){if(!text)return;if(AZ.cfg()&&S.settings.azTts!==false&&Date.now()>AZ.ttsOff){const rate=o.rate||(o.lang==='es'?1:S.settings.rate);
-  try{TTS&&TTS.cancel();const buf=await AZ.ttsBuffer(text,{lang:o.lang||'en',rate});return await playBuffer(buf)}catch(e){console.warn('Azure TTS → voz del sistema',e.message);AZ.ttsOff=Date.now()+(/429/.test(e.message)?60000:15000)}}
- return speakWeb(text,o)}
+/* ONE entry point for every spoken line: sanitize (no symbols/IPA/emoji/markdown) -> segments (quoted English inside Spanish uses the English voice) -> Azure SSML or system voice */
+let SPK=0;
+async function speak(text,o={}){if(!text)return;const lang=o.lang||'en';const segs=ttsSegments(text,lang);if(!segs.length)return;const g=++SPK;
+ if(AZ.cfg()&&S.settings.azTts!==false&&Date.now()>AZ.ttsOff){const rate=o.rate||(lang==='es'?0.95:S.settings.rate);
+  try{TTS&&TTS.cancel();const buf=await AZ.ttsBuffer(segs,{lang,rate});return await playBuffer(buf)}catch(e){console.warn('Azure TTS → voz del sistema',e.message);AZ.ttsOff=Date.now()+(/429/.test(e.message)?60000:15000)}}
+ for(const sg of segs){if(g!==SPK)break;await speakWeb(sg.text,Object.assign({},o,{lang:sg.lang,rate:sg.lang===lang?o.rate:0.9}))}}
 function speakWeb(text,{lang='en',rate,pitch=1}={}){stopAudio();return new Promise(res=>{if(!TTS){res();return}
  const u=new SpeechSynthesisUtterance(text);u.lang=lang==='es'?'es-US':'en-US';const v=voiceFor(lang);if(v)u.voice=v;
  u.rate=rate||(lang==='es'?1:S.settings.rate);u.pitch=pitch;
@@ -297,7 +310,7 @@ async function speakSlow(t){return speak(t,{rate:Math.max(0.5,S.settings.rate*0.
 function plainText(h){const d=document.createElement('div');d.innerHTML=h;return d.textContent.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu,'').replace(/\s+/g,' ').trim()}
 /* Sam always talks to Yonathan in Spanish: if no explicit "es" text, the bubble text itself is spoken with the Spanish voice. silent:true for English model lines. */
 function coachSay(html,{es,en,mood:m,silent}={}){$('#bubbleText').innerHTML=html;if(m)mood(m);
- const sp=silent?'':(es||plainText(html));
+ const sp=silent?'':(es||plainText(String(html).replace(/<b>([^<]{2,80})<\/b>/g,'"$1"')));
  if(sp&&S.settings.coachEs!==false)return speak(sp,{lang:'es'}).then(()=>en?speak(en):null);if(en)return speak(en);return Promise.resolve()}
 
 /* ---------- Speech recognition ---------- */
@@ -405,8 +418,8 @@ function feedback(r){const bad=r.T.filter((w,i)=>r.st[i]!=='ok');let head=r.scor
  if(r.extra.length)li.push(`<li>Escuché palabras de más: <i>${r.extra.map(esc).join(', ')}</i></li>`);
  top.forEach(k=>li.push(`<li>🔧 <b>${SOUNDS[k].n}:</b> ${SOUNDS[k].tip}</li>`));
  if(r.score<75)li.push(`<li>💪 ${pick(MOTIV)}</li>`);
- let say=r.score>=90?'¡Excelente!':r.score>=75?'Muy bien.':r.score>=50?'Casi. Repite las palabras en rojo.':'Escúchalo otra vez, más lento, y repite.';
- return{head,html:`<b>${head}</b><ul>${li.join('')}</ul>`,say,bad}}
+ const sy=r.score>=90?pick(SAYS.great):r.score>=75?pick(SAYS.ok):r.score>=50?pick(SAYS.almost)+' Repite las palabras en rojo.':'Escúchalo otra vez, más despacito, y repite.';
+ return{head,html:`<b>${head}</b><ul>${li.join('')}</ul>`,say:sy,bad}}
 
 /* ---------- Respelling highlighter ---------- */
 function prHTML(p){return esc(p).replace(/(th|dh|sh|ii|uu|æ|v|z)/g,'<span class="sp">$1</span>')}
@@ -635,9 +648,16 @@ const AZ={sdk:null,loading:null,cur:null,ttsCache:new Map(),ttsOff:0,
   const avg=k=>{const v=segs.filter(s=>s.pa[k]!=null);if(!v.length)return null;return Math.round(v.reduce((a,s)=>a+s.pa[k]*w(s),0)/v.reduce((a,s)=>a+w(s),0))};
   return{text:segs.map(s=>s.text).join(' ').trim(),words,segs:segs.length,pa:{pron:avg('pron'),acc:avg('acc'),flu:avg('flu'),comp:null,pros:avg('pros')},dur:segs.reduce((a,s)=>a+(s.dur||0),0)}},
  /* ---- Neural TTS (REST) ---- */
- async ttsBuffer(text,{lang='en',rate=1}={}){const voice=lang==='es'?(S.settings.azVoiceEs||'es-MX-DaliaNeural'):(S.settings.azVoiceEn||'en-US-AvaMultilingualNeural');
-  const pct=Math.round((rate-1)*100);const k=voice+'|'+pct+'|'+text;if(this.ttsCache.has(k))return this.ttsCache.get(k);
-  const ssml=`<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${lang==='es'?'es-MX':'en-US'}"><voice name="${voice}"><prosody rate="${pct>=0?'+':''}${pct}%">${esc(text)}</prosody></voice></speak>`;
+ vstyles:null,async loadStyles(){if(this.vstyles||this._vsl)return;this._vsl=1;this.vstyles={};try{const v=await fetch(`https://${KEYS.azRegion.trim()}.tts.speech.microsoft.com/cognitiveservices/voices/list`,{headers:{'Ocp-Apim-Subscription-Key':KEYS.azKey.trim()}});if(v.ok){const l=await v.json();const m={};(Array.isArray(l)?l:[]).forEach(x=>{if(x&&x.ShortName)m[x.ShortName]=x.StyleList||[]});this.vstyles=m}}catch(e){}},
+ ssmlText(t){return esc(t).replace(/([.!?¿¡…])\s+/g,'$1 <break time="220ms"/> ').replace(/([,;:])\s+/g,'$1 <break time="90ms"/> ')},
+ async ttsBuffer(segs,{lang='en',rate=1}={}){if(typeof segs==='string')segs=[{lang,text:segs}];
+  const vEs=S.settings.azVoiceEs||'es-MX-DaliaNeural',vEn=S.settings.azVoiceEn||'en-US-AvaMultilingualNeural';if(!this.vstyles)this.loadStyles();
+  const pct=r=>{const p=Math.round((r-1)*100);return (p>=0?'+':'')+p+'%'};
+  const k=lang+'|'+rate+'|'+vEs+'|'+vEn+'|'+JSON.stringify(segs)+'|'+(this.vstyles?1:0);if(this.ttsCache.has(k))return this.ttsCache.get(k);
+  const style=v=>{const L=this.vstyles&&this.vstyles[v]||[];return ['friendly','cheerful','chat'].find(x=>L.includes(x))};
+  const body=segs.map(sg=>{const v=sg.lang==='es'?vEs:vEn;const r=sg.lang===lang?rate:0.9;const st=style(v);const inner=`<prosody rate="${pct(r)}">${this.ssmlText(sg.text)}</prosody>`;
+   return `<voice name="${v}">${st?`<mstts:express-as style="${st}" styledegree="0.8">${inner}</mstts:express-as>`:inner}</voice>`}).join('');
+  const ssml=`<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="${lang==='es'?'es-MX':'en-US'}">${body}</speak>`;
   const r=await fetch(`https://${KEYS.azRegion.trim()}.tts.speech.microsoft.com/cognitiveservices/v1`,{method:'POST',headers:{'Ocp-Apim-Subscription-Key':KEYS.azKey.trim(),'Content-Type':'application/ssml+xml','X-Microsoft-OutputFormat':'audio-24khz-48kbitrate-mono-mp3'},body:ssml});
   if(!r.ok)throw new Error('tts '+r.status);const ab=await r.arrayBuffer();
   const c=AUD.get();const buf=await new Promise((ok,ko)=>{const p=c.decodeAudioData(ab,ok,ko);if(p&&p.then)p.then(ok,ko)});
@@ -706,8 +726,8 @@ async function azAttempt(it,card,o={}){const res=card.querySelector('.res'),live
  const lb=res.querySelector('.loopbtn');if(lb)lb.onclick=()=>{lb.remove();coachLoop(it,res.querySelector('.loop'),r,o)};
  if(!o.quiet){const weak=r.words.filter(w=>w.acc!=null&&w.acc<75&&w.err!=='Insertion').sort((a,b)=>a.acc-b.acc)[0];
   const wd=weak&&(weak.phon||[]).map(phDiag).sort((a,b)=>a.acc-b.acc)[0];
-  if(S.settings.coachEs!==false)await speak(`Sacaste ${v.score} de 100. `+(v.score>=90?'¡Excelente!':v.score>=75?'Muy bien.':weak?`Casi. La palabra que más te costó fue:`:'Casi. Intenta de nuevo.'),{lang:'es'});
-  if(weak&&v.score<90){await speakSlow(weak.w);if(wd&&wd.info&&S.settings.coachEs!==false)await speak((wd.heard&&wd.hinfo?`Sonó más como el sonido de ${wd.hinfo.ex.split(',')[0]}. `:'')+wd.info.how,{lang:'es'})}
+  if(S.settings.coachEs!==false)await speak(`Sacaste ${v.score} de 100. `+(v.score>=90?say('great'):v.score>=75?say('ok'):weak?'':say('almost')+' Inténtalo otra vez.'),{lang:'es'});
+  if(weak&&v.score<90&&S.settings.coachEs!==false){await speak(wd?friendlyTip(weak,wd)+' '+say('listen')+` "${/^i$/i.test(weak.w)?'I':weak.w}". `+say('you'):say('almost')+` Cuida la palabra "${weak.w}".`,{lang:'es'})}
   if(lb&&S.settings.autoLoop&&document.body.contains(lb)){lb.remove();coachLoop(it,res.querySelector('.loop'),r,o)}}
  return v}
 /* ---------- the coaching loop ---------- */
@@ -716,9 +736,9 @@ function loopUI(box,html){box.innerHTML=`<div class="card loopcard">${html}<div 
 document.addEventListener('click',e=>{const b=e.target.closest('[data-loop]');if(!b||!LOOP)return;const a=b.dataset.loop;if(a==='go'){LOOP.go&&LOOP.go()}else{LOOP[a]=true;AZ.stop();stopAudio();LOOP.go&&LOOP.go()}});
 function waitGo(auto){return new Promise(r=>{LOOP.go=()=>{LOOP.go=null;r()};if(auto)setTimeout(()=>LOOP&&LOOP.go&&LOOP.go(),350)})}
 async function modelWord(w,first){const worst=(w.phon||[]).map(phDiag).sort((a,b)=>a.acc-b.acc)[0];
- if(first&&worst&&worst.info&&S.settings.coachEs){await speak(`Fíjate en el sonido de ${worst.info.ex.split(',')[0]}. ${worst.info.how}`,{lang:'es'})}
- if(LOOP.stop||LOOP.skip)return;await speak(first?'Escucha y repite después de mí:':'Otra vez, escucha:',{lang:'es'});if(LOOP.stop||LOOP.skip)return;await speakSlow(w.w);await sleep(250);if(LOOP.stop||LOOP.skip)return;await speak(w.w);
- if(first&&worst&&worst.info&&worst.info.pair&&worst.heard){await sleep(200);await speak(`${worst.info.pair[0]}... ${worst.info.pair[1]}`,{rate:0.75})}}
+ if(first&&worst&&S.settings.coachEs!==false){await speak(friendlyTip(w,worst,{first:false}),{lang:'es'})}
+ if(LOOP.stop||LOOP.skip)return;await speak(first?say('listen'):say('again'),{lang:'es'});if(LOOP.stop||LOOP.skip)return;await speakSlow(w.w);await sleep(250);if(LOOP.stop||LOOP.skip)return;await speak(w.w);
+ if(first&&worst&&worst.info&&worst.info.pair&&worst.heard){await sleep(200);await speak(`Fíjate en la diferencia: "${worst.info.pair[0]}", "${worst.info.pair[1]}". `+say('you'),{lang:'es'})}}
 async function coachLoop(it,box,r,o={}){const T=S.settings.threshold||80,maxW=S.settings.maxWord||5,maxP=S.settings.maxPhrase||3;LOOP={};let phraseTry=1;const log=[];
  const auto=S.settings.autoListen;const micBtn=lbl=>`<div class="row"><button class="mic big pri" data-loop="go">🎤 ${lbl}</button></div>`;
  while(!LOOP.stop&&!paGood(r,T)&&phraseTry<=maxP){
@@ -733,13 +753,13 @@ async function coachLoop(it,box,r,o={}){const T=S.settings.threshold||80,maxW=S.
     tries++;if(wr.error){await coachSay(azErr(wr),{mood:'concern'});await sleep(500);continue}
     const ww=wr.words.find(x=>x.err!=='Insertion')||wr.words[0];if(!ww||ww.acc==null){await coachSay('No te escuché. Otra vez.');continue}
     phStat([ww]);w=ww;log.push([w0.w,ww.acc]);
-    if(ww.acc>=T){ok=true;addXP(3);mood('happy');loopUI(box,`<div class="big" style="color:var(--ok)">✅ ${esc(w0.w)}: ${ww.acc}</div>${phChips(ww)}`);await speak(pick(['¡Eso es!','¡Perfecto, así suena!','¡Muy bien, ahora sí!']),{lang:'es'});await sleep(500)}
-    else{const d=(ww.phon||[]).map(phDiag).sort((a,b)=>a.acc-b.acc)[0];await coachSay(`<b>${esc(w0.w)}: ${ww.acc}/100.</b> ${d&&d.heard?`Sonó como /${esc(d.heard)}/ en vez de /${esc(d.exp)}/.`:'Casi.'} Otra vez.`,{es:`${ww.acc} de 100. ${d&&d.info?(d.heard&&d.hinfo?'Sonó más como el sonido de '+d.hinfo.ex.split(',')[0]+'. ':'')+d.info.how:'Casi.'} Otra vez.`,mood:'concern'})}
+    if(ww.acc>=T){ok=true;addXP(3);mood('happy');loopUI(box,`<div class="big" style="color:var(--ok)">✅ ${esc(w0.w)}: ${ww.acc}</div>${phChips(ww)}`);await speak(say('good'),{lang:'es'});await sleep(500)}
+    else{const d=(ww.phon||[]).map(phDiag).sort((a,b)=>a.acc-b.acc)[0];await coachSay(`<b>${esc(w0.w)}: ${ww.acc}/100.</b> ${d&&d.heard?`Sonó como /${esc(d.heard)}/ en vez de /${esc(d.exp)}/.`:'Casi.'} Otra vez.`,{es:`${ww.acc} de 100. `+(d?friendlyTip(ww,d):say('almost')),mood:'concern'})}
     if(ok)break}
-   if(!ok&&!LOOP.stop){srsAdd({id:'w_'+w0.w.toLowerCase(),en:w0.w,pr:phRespell(w.phon||w0.phon||[]),es:'Palabra difícil (pronunciación)',ipa:'/'+(w0.phon||[]).map(x=>x.p).join('')+'/'});if(!LOOP.skip)await coachSay(`Dejo <b>${esc(w0.w)}</b> en tu repaso. Mañana sale mejor 💪`,{es:'Dejo esta palabra en tu repaso. Mañana sale mejor.'})}}
+   if(!ok&&!LOOP.stop){srsAdd({id:'w_'+w0.w.toLowerCase(),en:w0.w,pr:phRespell(w.phon||w0.phon||[]),es:'Palabra difícil (pronunciación)',ipa:'/'+(w0.phon||[]).map(x=>x.p).join('')+'/'});if(!LOOP.skip)await coachSay(`Dejo <b>${esc(w0.w)}</b> en tu repaso. Mañana sale mejor 💪`,{es:say('later')})}}
   if(LOOP.stop)break;
   loopUI(box,`<div class="small mut">Paso 2 · Ahora la frase completa (ronda ${phraseTry}/${maxP})</div><div class="en">${esc(it.en)}</div><div class="pr">🗣️ ${prHTML(it.pr||'')}</div>${micBtn('Decir la frase')}`);
-  await speak('Ahora la frase completa. Repite después de mí.',{lang:'es'});if(LOOP.stop)break;await speak(it.en,{rate:Math.max(0.6,S.settings.rate*0.85)});if(LOOP.stop)break;await waitGo(auto);if(LOOP.stop)break;
+  await speak(pick(['Ahora la frase completa.','Muy bien, ahora toda la frase.','Ahora juntamos todo.'])+' '+say('repeat'),{lang:'es'});if(LOOP.stop)break;await speak(it.en,{rate:Math.max(0.6,S.settings.rate*0.85)});if(LOOP.stop)break;await waitGo(auto);if(LOOP.stop)break;
   box.querySelector('.loopcard').insertAdjacentHTML('beforeend','<div class="small mut">🎧 Escuchando…</div>');
   let nr;try{nr=await AZ.assess(it.en)}catch(e){micFail(e);break}
   phraseTry++;if(nr.error||!nr.words.length){await coachSay(azErr(nr));await sleep(500);continue}
@@ -747,15 +767,15 @@ async function coachLoop(it,box,r,o={}){const T=S.settings.threshold||80,maxW=S.
   if(!paGood(r,T))loopUI(box,renderPA(r,{ref:it.en,expandWeak:1}));}
  const okF=paGood(r,T);LOOP=null;
  box.innerHTML=`<div class="card loopcard"><h3>${okF?'🏆 ¡Suena bien!':'🧗 Buen trabajo, seguimos mañana'}</h3>${renderPA(r,{ref:it.en,expandWeak:okF?0:2})}${log.length?`<div class="small mut">Palabras practicadas: ${log.map(([w,s])=>`${esc(w)} ${s}`).join(' · ')}</div>`:''}</div>`;
- if(okF){addXP(10);mood('happy');await coachSay(`🏆 Precisión <b>${r.pa.acc}</b> ≥ ${T}. ¡Lo lograste! +10 XP`,{es:'¡Lo lograste! Ahora suena bien.'})}else{srsAdd(it,true);await coachSay('Lo dejé en tu repaso espaciado. La repetición en días distintos es lo que más fija la pronunciación.',{es:'Buen esfuerzo. Lo repasamos mañana.'})}
+ if(okF){addXP(10);mood('happy');await coachSay(`🏆 Precisión <b>${r.pa.acc}</b> ≥ ${T}. ¡Lo lograste! +10 XP`,{es:pick(['¡Lo lograste! Ahora sí suena muy bien.','¡Eso, ya quedó! Suena natural.','¡Muy bien! Así se dice.'])})}else{srsAdd(it,true);await coachSay('Lo dejé en tu repaso espaciado. La repetición en días distintos es lo que más fija la pronunciación.',{es:say('later')})}
  if(o.onLoopDone)o.onLoopDone(r)}
 
 /* ================= VIEWS ================= */
 const ALL_ITEMS=()=>[...DATA.dialogues.flatMap(d=>d.lines),...DATA.idioms,...DATA.idioms.map(i=>i.ex),...DATA.questions];
 function show(tab){$$('nav#tabs button').forEach(b=>b.classList.toggle('act',b.dataset.tab===tab));$$('.view').forEach(v=>v.classList.toggle('act',v.id==='v-'+tab));stopListening();
- CARDS={};if(typeof LOOP!=='undefined'&&LOOP){LOOP.stop=true}tuStopAll();stopAudio();
+ CARDS={};if(typeof GU!=='undefined'&&GU)GU.stop=true;if(typeof LOOP!=='undefined'&&LOOP){LOOP.stop=true}tuStopAll();stopAudio();
  if(DAILY&&DAILY.active&&tab!=='daily'){DAILY.stop=true;DAILY.active=false;DAILY.cancelTap&&DAILY.cancelTap();if(Object.keys(SESSION.items).length)setTimeout(()=>endSession(null),400)}
- const f={daily:renderDaily,tutor:renderTutor,pron:renderPron,settings:renderSettings,home:renderHome,lessons:renderLessons,idioms:renderIdioms,pairs:renderPairs,conv:renderConv,f432:render432,review:renderReview,test:renderTest,stats:renderStats,method:renderMethod}[tab];f&&f();window.scrollTo(0,0);location.hash=tab}
+ const f={daily:renderDaily,tutor:renderTutor,pron:renderPron,settings:renderSettings,home:renderHome,lessons:renderLessons,idioms:renderIdioms,pairs:renderPairs,conv:renderConv,f432:render432,review:renderReview,test:renderTest,stats:renderStats,method:renderMethod,gram:renderGram,slang:renderSlang}[tab];f&&f();window.scrollTo(0,0);location.hash=tab}
 $('#tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b)show(b.dataset.tab)});
 
 /* ---------- HOME ---------- */
@@ -774,7 +794,8 @@ function renderHome(){setTimeout(()=>{const h=$('#homeDaily');if(h)h.innerHTML=h
   <div class="card"><div class="mut small">Nivel ${L.n} · ${L.name}</div><div class="kpi">⭐ ${S.xp} XP</div><div class="bar"><i style="width:${L.pct*100}%"></i></div><div class="small mut">${L.toNext} XP para el siguiente nivel</div></div>
  </div>
  <div id="homeDaily"></div>
- <div class="grid hero"><button class="pri big" onclick="show('tutor')">🤖 Hablar con Sam (IA)<br><span class="small">cualquier tema · te explica lo que quieras</span></button><button class="big" onclick="show('pron')">🎯 Pronunciar<br><span class="small">fonema por fonema, hasta que suene bien</span></button></div>
+ <div class="card daily-hero"><div class="mut small">📘 Gramática · tu curso principal</div><div class="en">${esc(gramCurrent().t)}</div><div class="small mut">${gramCurrent().lvl} · ${Object.keys(gramState().done).length}/${GRAMO.length} unidades con quiz</div><div class="row"><button class="pri big" onclick="openUnit(gramCurrent().id)">▶ Continuar gramática</button><button onclick="show('gram')">Ver curso</button></div></div>
+ <div class="grid hero"><button class="pri big" onclick="show('tutor')">🤖 Hablar con Sam (IA)<br><span class="small">💬 Tema libre · tú eliges el tema · te explica lo que quieras</span></button><button class="big" onclick="show('pron')">🎯 Pronunciar<br><span class="small">fonema por fonema, hasta que suene bien</span></button></div>
  ${!AZ.cfg()||!aiCfg()?`<div class="card warn small">⚙️ ${!AZ.cfg()?'Falta configurar <b>Azure Speech</b> (evaluación de fonemas y voz). ':''}${!aiCfg()?'Falta la <b>clave de IA</b> para el tutor libre. ':''}<button class="sm" onclick="show('settings')">Configurar</button></div>`:''}
  <div class="card"><h3>📋 Plan de hoy (≈15–20 min, basado en las 4 vertientes de Nation)</h3>
   ${plan.map(([i,txt,p,tab])=>`<div class="row" style="justify-content:space-between"><span>${p>=1?'✅':i} ${txt}</span><button class="sm" onclick="show('${tab}')">Ir →</button></div><div class="bar" style="margin:.2rem 0 .5rem"><i style="width:${p*100}%"></i></div>`).join('')}
@@ -838,7 +859,7 @@ async function mpSay(){const p=pick(DATA.pairs),w=Math.random()<.5?p.a:p.b,o=w==
    if(r.error||!r.words.length){$('#mpFb').innerHTML=azErr(r);return}const ww=r.words.find(x=>x.err!=='Insertion')||r.words[0];phStat([ww]);const ok=(ww.acc||0)>=(S.settings.threshold||80);
    MP.n++;if(ok)MP.ok++;today().mp++;const s=S.sounds[p.k]||(S.sounds[p.k]={att:0,fail:0});s.att++;if(!ok)s.fail++;save();mpUpd();addXP(ok?3:1);
    $('#mpFb').innerHTML=`<p>${ok?'✅ ¡Bien pronunciado!':'❌ Aún no suena bien.'} Precisión <b>${ww.acc}</b>/100</p>${wordDetail(ww)}<div class="row"><button class="sm" onclick="speak('${w.en}')">🔊 ${w.en}</button><button class="sm" onclick="speak('${o.en}')">🔊 ${o.en}</button><button class="sm" onclick="mpSayRetry()">🔁 Otra vez</button><button class="pri" onclick="mpSay()">Siguiente →</button></div>`;
-   coachSay(ok?'¡Muy bien pronunciado!':'Mira qué fonema falló y vuelve a intentarlo.',{mood:ok?'happy':'concern',es:ok?'¡Muy bien!':'Casi. Mira el fonema en rojo e inténtalo otra vez.'});return}
+   coachSay(ok?'¡Muy bien pronunciado!':'Mira qué fonema falló y vuelve a intentarlo.',{mood:ok?'happy':'concern',es:ok?say('good'):say('almost')+' Fíjate en el sonido marcado en rojo y otra vez.'});return}
   if(!SRC){$('#mpFb').textContent='Para esta parte configura Azure en ⚙️ Ajustes o usa Chrome.';return}
   const r=await listenOnce(t=>{$('#mpFb').textContent='Oigo: '+t});$('#mpMic').dataset.busy='';
   if(!r||!r.alts.length){$('#mpFb').textContent='No te escuché. Intenta otra vez.';return}
@@ -1029,15 +1050,20 @@ function tutorSystem(mode,topic){const lvl=S.tests.length?S.tests[S.tests.length
   :`LANGUAGE RATIO "Más inglés": speak mostly in simple, natural English (short sentences). Use Spanish only for explanations of corrections, instructions and a short summary when something might be hard. Still give one useful English phrase to repeat in "practice".`;
  const m=mode==='explain'?'EXPLAIN — the student wants you to explain a topic. Explain clearly and simply (concrete examples), check understanding, and teach the key English phrases for that topic.'
   :mode==='daily'?`DAILY LESSON — today's lesson phrase is "${topic}". He just practiced pronouncing it. Now hold a short, guided, beginner-friendly conversation in which you ask him easy questions that make him USE this phrase (and small variations). Give him model answers to repeat.`
-  :'CONVERSATION — talk about any topic he brings up; be curious and keep it flowing.';
+  :'CONVERSATION (Tema libre) — he chose the topic himself; talk about it (or anything he brings up), be curious and keep it flowing.';
+ const g=typeof gramCurrent==='function'?gramCurrent():null;
+ const slang=S.settings.tuSlang?`- SLANG ON: he wants to understand everyday American slang and African American English (AAVE). About every 2-3 turns, teach ONE widely used, non-offensive slang expression that fits the topic (e.g. no cap, bet, lowkey, finna, it's giving, say less) in "practice" or a segment, with its meaning and a register note in Spanish (informal, only with friends, not at work). Treat AAVE as a legitimate dialect with its own grammar; never use slurs, never caricature an accent.`:`- Use standard, neutral American English; don't teach slang unless he asks.`;
  return `You are "Sam", a warm, patient, honest and encouraging English speaking coach for Yonathan, a native Spanish speaker from Latin America (estimated level ${lvl}). This is a SPOKEN conversation: he talks by voice (speech-recognition transcript, may be in English or Spanish) and everything you say is read aloud by text-to-speech, Spanish parts with a Mexican Spanish voice and English parts with an American English voice.
 Mode: ${m}${topic&&mode!=='daily'?` Starting topic: "${topic}".`:''}
 ${ratio}
 Rules:
 - Split what you say into "segments", each with "lang":"es" or "lang":"en". Never mix languages inside one segment. Every English segment MUST include "pr" (Spanish-style phonetic respelling) and "es" (Spanish translation).
 - Keep it short: at most ~5 segments per turn, each 1-2 short sentences. No markdown, no emojis, no lists.
-- Correct grammar/word-choice mistakes in his LAST English message only (max 3, most important), explanation in simple Spanish. Ignore punctuation/capitalization and speech-recognition artifacts. Don't correct him for answering in Spanish; instead show him the English version in "natural".
-- If a pronunciation report is given, add "pron_tips" (max 3 words) with a Spanish tip about mouth/tongue placement.
+- Correct grammar/word-choice mistakes in his LAST English message only (max 3, most important), explanation in simple Spanish. ALWAYS explicitly correct VERB TENSE errors (wrong tense, missing 3rd-person -s, did + past form, missing do/does/did, be vs do, present perfect vs past) and PREPOSITION errors (in/on/at for time and place, to/for, of/from, by/with, about, verb+preposition and adjective+preposition combos), and WORDS USED WRONGLY (false friends, wrong word). In "explanation_es" name the rule in plain Spanish with one tiny example (e.g. "Con los días se usa on: on Monday"; "Después de did el verbo va en presente: did you go").
+${g?`- His grammar course is now on "${g.t}" (${g.lvl}). When it fits naturally, use and reinforce that structure.`:''}
+${slang}
+- EVERYTHING you write is SPOKEN by a voice. Sound like a warm, friendly human tutor chatting, not a textbook: short natural sentences, everyday Mexican Spanish, varied encouraging phrases (don't repeat the same praise every turn). NEVER write symbols or notation in "text", "explanation_es", "tip_es" or "encouragement_es": no slashes, no IPA or phonetic symbols, no brackets, no arrows, no asterisks, no emojis, no markdown, no lists, no abbreviations like "ej." or "vs". Describe sounds in everyday words (e.g. "la th de think se hace con la lengua entre los dientes, soplando suave") and stress as "la fuerza va en la primera parte". Avoid jargon like "fonema", "schwa" or "acento tónico"; say "el sonido" and "la fuerza de la palabra". Ignore punctuation/capitalization and speech-recognition artifacts. Don't correct him for answering in Spanish; instead show him the English version in "natural".
+- If a pronunciation report is given, add "pron_tips" (max 3 words) with a friendly Spanish tip about mouth/tongue placement, in plain words (no symbols); the app will drill those words with him right after your reply.
 - Spanish-style phonetic respelling: read it like Spanish, mark the stressed syllable with an accent, and use: th = /θ/ (think), dh = /ð/ (this), sh = /ʃ/, ch = /tʃ/, dy = /dʒ/ (job = dyab), j = English h (house = jáus), y = /j/, v = real v, z = buzzing z, ii = long ee, uu = long oo, æ = cat vowel, er = /ɝ/, a = schwa or /ʌ/, flap t between vowels = r (water = uárer). Example: "How are you doing?" -> "jáu ar yu dúin?"
 - Return ONLY a JSON object with exactly these keys:
 {"segments":[{"lang":"es","text":"..."},{"lang":"en","text":"...","pr":"...","es":"..."}],"practice":{"en":"short English phrase for him to repeat now","pr":"respelling","es":"Spanish meaning"},"corrections":[{"original":"his wrong phrase","corrected":"correct phrase","corrected_pr":"respelling","explanation_es":"brief explanation in Spanish"}],"natural":{"text":"how a native would say his whole last message in English (null if already natural)","pr":"respelling","es":"Spanish meaning"},"vocab":[{"word":"useful English word or phrase","pr":"respelling","meaning_es":"meaning in Spanish"}],"pron_tips":[{"word":"","pr":"","tip_es":""}],"encouragement_es":"one short honest, motivating comment in Spanish"}
@@ -1049,20 +1075,23 @@ let TU=null;
 function tuNew(mode,topic){TU={id:Date.now(),mode,topic,msgs:[],turns:[],t0:Date.now(),pron:[],ctl:null,busy:false};S.tutorCur=TU;save()}
 function tuTrim(){/* keep system + last 14 messages to bound cost */return TU.msgs.slice(-14)}
 const TU_TOPICS=[['Mi día','Let\'s talk about my day.'],['Viajes','I want to talk about travel.'],['Trabajo','Let\'s talk about my job.'],['Tecnología e IA','Let\'s talk about technology and AI.'],['Películas y series','Let\'s talk about movies and TV shows.'],['Fútbol / deportes','Let\'s talk about sports.'],['Comida','Let\'s talk about food and cooking.'],['Entrevista de trabajo (simulacro)','Can we practice a job interview? You are the interviewer.']];
+TU_TOPICS.push(['Familia','Let\'s talk about my family.'],['Música','Let\'s talk about music.'],['Mi ciudad','Let\'s talk about my city.'],['Salud y ejercicio','Let\'s talk about health and exercise.'],['Dinero y compras','Let\'s talk about money and shopping.'],['Pedir en un restaurante (simulacro)','Let\'s role-play ordering food at a restaurant. You are the waiter.'],['En el aeropuerto (simulacro)','Let\'s role-play checking in at the airport.'],['Planes para el futuro','Let\'s talk about my plans for the future.'],['Mi infancia','Let\'s talk about my childhood.'],['Noticias de hoy','Let\'s talk about the news.']);
+const TU_SUG=['my weekend','my job','my family','travel','food','soccer','movies','music','my city','technology','my plans for the future','a job interview','buying a car','renting an apartment','going to the doctor','small talk with neighbors','Mi día','Mi trabajo','Cómo funciona el internet','La diferencia entre say y tell','Cómo pedir un aumento','Hablar por teléfono'];
 const TU_EXPLAIN=[['make vs do','Explain the difference between "make" and "do".'],['Presente perfecto','Explain when to use the present perfect.'],['Cómo funciona la bolsa','Explain how the stock market works, in simple English.'],['Phrasal verbs comunes','Explain some common phrasal verbs with examples.'],['Qué es la IA','Explain what artificial intelligence is.'],['Historia de EE. UU. breve','Explain a short history of the United States.']];
 function renderTutor(){const v=$('#v-tutor');
  if(!aiCfg()){v.innerHTML=`<h2>🤖 Tutor IA</h2><div class="card"><p>Habla de <b>cualquier tema</b> o pide que te explique <b>lo que quieras</b>. Sam te responde con voz, subtítulo de pronunciación, correcciones de gramática y frases más naturales.</p><p>Para activarlo necesitas una <b>clave de IA</b> (xAI o OpenAI). Para que también evalúe tus <b>fonemas</b> mientras conversas, agrega Azure Speech.</p><button class="pri big" onclick="show('settings')">⚙️ Configurar claves</button></div>`;return}
  if(TU&&TU.msgs.length){tuRender();return}
- v.innerHTML=`<h2>🤖 Tutor IA</h2><div class="card"><div class="row"><button class="pri" id="tuM1">🗣️ Conversar</button><button id="tuM2">📚 Explícame un tema</button></div>
- <label class="small mut" for="tuTopic">¿De qué quieres hablar o qué quieres entender? (en inglés o español)</label><input type="text" id="tuTopic" placeholder="Ej: my weekend · cómo funciona el internet · la diferencia entre say y tell">
- <div class="chips" id="tuChips"></div><label>Idioma del coach<select id="tuCL">${Object.entries(COACH_LANG).map(([k,v])=>`<option value="${k}" ${k===(S.settings.coachLang||'es')?'selected':''}>${v}</option>`).join('')}</select></label><div class="row"><button class="pri big" id="tuGo">▶ Empezar</button></div>
+ v.innerHTML=`<h2>🤖 Tutor IA</h2><div class="card"><div class="row"><button class="pri" id="tuM1">💬 Tema libre</button><button id="tuM2">📚 Explícame un tema</button></div>
+ <h3>🎯 Tema libre: elige de qué hablamos</h3>
+ <label class="small mut" for="tuTopic">Escribe cualquier tema (en inglés o español) o toca una sugerencia:</label><input type="text" id="tuTopic" list="tuSug" placeholder="Ej: my weekend · cómo funciona el internet · mi trabajo"><datalist id="tuSug">${TU_SUG.map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+ <div class="chips" id="tuChips"></div><label>Idioma del coach<select id="tuCL">${Object.entries(COACH_LANG).map(([k,v])=>`<option value="${k}" ${k===(S.settings.coachLang||'es')?'selected':''}>${v}</option>`).join('')}</select></label><label class="chk"><input type="checkbox" id="tuDr" ${S.settings.tuDrill!==false?'checked':''}> 🛠️ Corregir palabras en tiempo real (repetir hasta que salga bien)</label><label class="chk"><input type="checkbox" id="tuSl" ${S.settings.tuSlang?'checked':''}> 🗽 Incluir slang e inglés afroamericano</label><div class="row"><button class="pri big" id="tuGo">▶ Empezar</button></div>
  <p class="small mut">Modelo: ${esc(KEYS.aiModel)} · ${AZ.cfg()?'🎯 Evaluación fonética de Azure activa':'⚠️ Sin Azure: se usará el reconocimiento del navegador o el teclado, sin análisis de fonemas'}</p></div>
  ${(S.sessions||[]).length?`<h3>Sesiones anteriores</h3>${S.sessions.slice(-6).reverse().map(s=>`<div class="card small"><b>${esc(s.topic||'Tema libre')}</b> · ${new Date(s.t).toLocaleDateString('es')} · ${s.turns} turnos · ${s.mistakes} correcciones${s.pron!=null?` · pronunciación ${s.pron}`:''}</div>`).join('')}`:''}`;
- let mode='chat';const chips=()=>{$('#tuChips').innerHTML=(mode==='chat'?TU_TOPICS:TU_EXPLAIN).map(([l,t])=>`<button class="sm" data-t="${esc(t)}">${esc(l)}</button>`).join('');$$('#tuChips button').forEach(b=>b.onclick=()=>{$('#tuTopic').value=b.dataset.t})};
+ let mode='chat';const chips=()=>{$('#tuChips').innerHTML=(mode==='chat'?TU_TOPICS:TU_EXPLAIN).map(([l,t])=>`<button class="sm" data-t="${esc(t)}">${esc(l)}</button>`).join('');$$('#tuChips button').forEach(b=>b.onclick=()=>{$('#tuTopic').value=b.dataset.t;$$('#tuChips button').forEach(x=>x.classList.toggle('pri',x===b))})};
  $('#tuM1').onclick=()=>{mode='chat';$('#tuM1').classList.add('pri');$('#tuM2').classList.remove('pri');chips()};$('#tuM2').onclick=()=>{mode='explain';$('#tuM2').classList.add('pri');$('#tuM1').classList.remove('pri');chips()};chips();
- $('#tuCL').onchange=e=>{S.settings.coachLang=e.target.value;save()};
- $('#tuGo').onclick=()=>{const t=$('#tuTopic').value.trim();tuNew(mode,t);tuRender();tuSend(t||(mode==='explain'?'Pregúntame qué tema quiero que me expliques.':'¡Hola Sam! Quiero practicar.'),{opening:true})}}
-function tuRender(){const v=$('#v-tutor');v.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin:0">${TU.mode==='daily'?'📅 Lección del día':TU.mode==='explain'?'🤖 Explícame':'🤖 Conversación'}: <span class="small mut">${esc(TU.topic||'tema libre')}</span></h2><button class="sm" id="tuEnd">🏁 Terminar sesión</button></div>
+ $('#tuCL').onchange=e=>{S.settings.coachLang=e.target.value;save()};$('#tuDr').onchange=e=>{S.settings.tuDrill=e.target.checked;save()};$('#tuSl').onchange=e=>{S.settings.tuSlang=e.target.checked;save()};
+ $('#tuGo').onclick=()=>{const t=$('#tuTopic').value.trim();tuNew(mode,t);tuRender();tuSend(t||(mode==='explain'?'Pregúntame qué tema quiero que me expliques.':'Tema libre: pregúntame de qué quiero hablar hoy y dame 3 ideas.'),{opening:true})}}
+function tuRender(){const v=$('#v-tutor');v.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin:0">${TU.mode==='daily'?'📅 Lección del día':TU.mode==='explain'?'🤖 Explícame':'💬 Tema libre'}: <span class="small mut">${esc(TU.topic||'tema libre')}</span></h2><button class="sm" id="tuEnd">🏁 Terminar sesión</button></div>
  <div id="tuLog"></div>
  <div id="tuBar"><div id="tuLive" class="small mut"></div><div class="row" style="flex-wrap:nowrap;margin:0"><button class="mic big" id="tuMic" aria-label="Hablar">🎤</button><button class="sm" id="tuLang" title="Idioma en el que vas a hablar">${S.settings.tuInLang==='es'?'🇲🇽 ES':'🇺🇸 EN'}</button><input type="text" id="tuText" placeholder="Habla con 🎤 o escribe aquí…" enterkeyhint="send"><button class="pri" id="tuSendB">➤</button></div></div>`;
  const log=$('#tuLog');TU.turns.forEach(t=>log.insertAdjacentHTML('beforeend',tuTurnHTML(t)));
@@ -1081,7 +1110,7 @@ function tuTurnHTML(t){if(t.role==='user')return `<div class="msg me"><div>${esc
 document.addEventListener('click',e=>{const p=e.target.closest('[data-prac]');if(p){openPractice({id:'u_'+hash(p.dataset.prac),en:p.dataset.prac,pr:p.dataset.pr||'',es:p.dataset.es||''});return}
  const v=e.target.closest('[data-vocab]');if(v){try{const x=JSON.parse(v.dataset.vocab);srsAdd({id:'v_'+hash(x.word),en:x.word,pr:x.pr||'',es:x.meaning_es||''});v.textContent='✓';v.disabled=true}catch(err){}}});
 function hash(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))|0;return (h>>>0).toString(36)}
-async function tuMic(){if(TU.busy)return;if(TU.ctl){TU.ctl.stop();return}const b=$('#tuMic');TU.stopSpeak=true;stopAudio();TTS&&TTS.cancel();const lng=S.settings.tuInLang==='es'?'es-MX':'en-US';
+async function tuMic(){if(TU.drilling&&LOOP){LOOP.stop=true;AZ.stop();stopAudio();return}if(TU.busy)return;if(TU.ctl){TU.ctl.stop();return}const b=$('#tuMic');TU.stopSpeak=true;stopAudio();TTS&&TTS.cancel();const lng=S.settings.tuInLang==='es'?'es-MX':'en-US';
  if(AZ.cfg()){try{b.dataset.busy='1';b.textContent='⏹';$('#tuLive').textContent='🎧 Te escucho… (toca ⏹ al terminar)';
    TU.ctl=await AZ.free({onText:t=>{$('#tuLive').textContent='🎧 '+t},silenceMs:S.settings.tuSilence||0,lang:lng});setMicButtons(true);
    const r=await TU.ctl.done;TU.ctl=null;b.dataset.busy='';b.textContent='🎤';$('#tuLive').textContent='';
@@ -1110,11 +1139,12 @@ async function tuSend(text,{pa,opening}={}){if(TU.busy)return;TU.busy=true;TU.st
  log.insertAdjacentHTML('beforeend',tuTurnHTML(st));log.lastElementChild.scrollIntoView({behavior:'smooth',block:'start'});
  S.tutorCur=tuSerialize();save();TU.busy=false;
  cor.forEach(c=>SESSION.cors.push(c));
- await tuSpeak(j,cor)}
+ let spoken=cor;if(!opening){TU.busy=true;try{const d=await tuDrill(pa,cor,j);if(d&&d.mis)spoken=[]}catch(e){console.warn('drill',e)}if(TU){TU.busy=false;TU.drilling=false}if(!TU||TU.stopSpeak)return}
+ await tuSpeak(j,spoken)}
 async function tuSpeak(j,cor){const segs=tuSegs(j);TU.speaking=true;
  for(const x of segs){if(!TU||TU.stopSpeak)break;$('#bubbleText').innerHTML=x.lang==='es'?esc(x.text):`<b>${esc(x.text)}</b><div class="pr">${prHTML(x.pr||'')}</div><div class="es">${esc(x.es||'')}</div>`;await speak(x.text,{lang:x.lang==='es'?'es':'en'})}
- if(TU&&!TU.stopSpeak&&cor&&cor.length&&S.settings.tuSpeakCor!==false){const c=cor[0];$('#bubbleText').innerHTML=`✏️ <s>${esc(c.original)}</s> → <b>${esc(c.corrected)}</b><div class="small">${esc(c.explanation_es||'')}</div>`;await speak('Una corrección: '+(c.explanation_es||''),{lang:'es'});await speak(c.corrected)}
- const pc=j.practice&&j.practice.en?j.practice:null;if(TU&&!TU.stopSpeak&&pc){$('#bubbleText').innerHTML=`🔁 <b>${esc(pc.en)}</b><div class="pr">${prHTML(pc.pr||'')}</div><div class="es">${esc(pc.es||'')}</div>`;await speak('Repite después de mí:',{lang:'es'});await speakSlow(pc.en);await speak(pc.en);await speak('Toca Repetir cuando estés listo, o contéstame con el micrófono.',{lang:'es'})}
+ if(TU&&!TU.stopSpeak&&cor&&cor.length&&S.settings.tuSpeakCor!==false){const c=cor[0];$('#bubbleText').innerHTML=`✏️ <s>${esc(c.original)}</s> → <b>${esc(c.corrected)}</b><div class="small">${esc(c.explanation_es||'')}</div>`;await speak(pick(['Un detallito:','Una cosita:','Ojo aquí:'])+' '+(c.explanation_es||'')+' '+pick(['Se dice:','Mejor di:','Lo correcto es:']),{lang:'es'});await speak(c.corrected)}
+ const pc=j.practice&&j.practice.en?j.practice:null;if(TU&&!TU.stopSpeak&&pc){$('#bubbleText').innerHTML=`🔁 <b>${esc(pc.en)}</b><div class="pr">${prHTML(pc.pr||'')}</div><div class="es">${esc(pc.es||'')}</div>`;await speak(say('repeat'),{lang:'es'});await speakSlow(pc.en);await speak(pc.en);await speak(pick(['Cuando quieras, toca Repetir, o contéstame con el micrófono.','Toca Repetir cuando estés listo, o platícame con el micrófono.','Tu turno: repítela o contéstame.']),{lang:'es'})}
  if(TU)TU.speaking=false}
 function tuSerialize(){return{id:TU.id,mode:TU.mode,topic:TU.topic,msgs:TU.msgs,turns:TU.turns.map(t=>t.role==='user'?{role:'user',text:t.text,pa:t.pa?{pa:t.pa.pa,words:t.pa.words.filter(w=>w.acc!=null&&w.acc<80).slice(0,8),text:t.pa.text}:null}:t),t0:TU.t0,pron:TU.pron}}
 function tuEnd(){if(!TU)return;if(TU.ctl)TU.ctl.stop();const n=TU.turns.filter(t=>t.role==='user').length;const mistakes=TU.turns.filter(t=>t.role==='sam').reduce((a,t)=>a+((t.j.corrections||[]).length),0);
@@ -1123,7 +1153,7 @@ function tuEnd(){if(!TU)return;if(TU.ctl)TU.ctl.stop();const n=TU.turns.filter(t
  S.tutorCur=null;save();const was=TU;TU=null;
  $('#v-tutor').innerHTML=`<h2>🏁 Sesión terminada</h2><div class="card"><div class="chips"><span>${n} turnos</span><span>${mistakes} correcciones (guardadas en Repaso)</span>${pron!=null?`<span>Pronunciación promedio ${pron}</span>`:''}</div><p>${n>=6?'¡Gran sesión! Hablar de verdad es lo que más desarrolla la fluidez.':'Sesión corta. Intenta llegar a 8–10 turnos: la fluidez sale de hablar mucho.'}</p><div class="row"><button class="pri" onclick="renderTutor()">Nueva sesión</button><button onclick="show('review')">Repasar mis errores</button></div></div>`;
  endSession('#v-tutor')}
-function tuStopAll(){if(TU){TU.stopSpeak=true;if(TU.ctl)TU.ctl.stop()}}
+function tuStopAll(){if(TU){TU.stopSpeak=true;if(TU.ctl)TU.ctl.stop();if(TU.drilling&&LOOP){LOOP.stop=true;AZ.stop()}}}
 if(S.tutorCur&&S.tutorCur.msgs&&S.tutorCur.msgs.length){TU=Object.assign({ctl:null,busy:false,pron:[]},S.tutorCur)}
 /* practice any sentence in a modal (with the Azure loop) */
 function openPractice(it){CARDS={};$('#pmBody').innerHTML=practiceCard(it,{noSrs:false,autoLoopFirst:true});$('#pmodal').classList.add('show')}
@@ -1186,6 +1216,8 @@ function renderSettings(){const st=S.settings,p=AI_PRESETS[KEYS.aiPreset]||AI_PR
   <label><input type="checkbox" id="autoLoop" ${st.autoLoop?'checked':''}> Entrar automáticamente al modo "repetir hasta que suene bien"</label>
   <label><input type="checkbox" id="autoListen" ${st.autoListen?'checked':''}> Escuchar automáticamente después de que el coach modele la palabra (sin tocar 🎤)</label>
   <label>Tutor IA: enviar mi mensaje automáticamente tras un silencio de<select id="tuSil">${[[0,'No, yo toco ⏹'],[2500,'2.5 s'],[4000,'4 s']].map(([v,l])=>`<option value="${v}" ${+st.tuSilence===v?'selected':''}>${l}</option>`).join('')}</select></label>
+  <label class="chk"><input type="checkbox" id="tuDrillS" ${st.tuDrill!==false?'checked':''}> 🛠️ Corregir palabras en tiempo real durante la conversación con IA</label>
+  <label class="chk"><input type="checkbox" id="tuSlangS" ${st.tuSlang?'checked':''}> 🗽 El tutor puede enseñarme slang e inglés afroamericano</label>
   <label>Idioma del coach<select id="coachLang">${Object.entries(COACH_LANG).map(([k,v])=>`<option value="${k}" ${k===(st.coachLang||'es')?'selected':''}>${v}</option>`).join('')}</select></label>
   <label><input type="checkbox" id="tuSpeakCor" ${st.tuSpeakCor?'checked':''}> Leer en voz alta las correcciones (en español)</label></div>
  <div class="card"><h3>🔊 Voz y pantalla</h3>
@@ -1195,6 +1227,7 @@ function renderSettings(){const st=S.settings,p=AI_PRESETS[KEYS.aiPreset]||AI_PR
   <label><input type="checkbox" id="optEs" ${st.es?'checked':''}> Mostrar traducción al español</label>
   <label><input type="checkbox" id="optCoachEs" ${st.coachEs?'checked':''}> El coach me explica en voz alta en español</label>
   <label>Meta diaria (minutos)<input type="number" id="goal" min="5" max="180" step="5" value="${st.goal}"></label></div>
+ ${materialHTML()}
  <div class="card"><h3>📱 Instalar en iPhone</h3><ol class="small"><li>Abre la dirección <b>https://</b> de la app en <b>Safari</b>.</li><li>Toca el botón <b>Compartir</b> (cuadro con flecha ↑) → <b>Agregar a pantalla de inicio</b> → <b>Agregar</b>.</li><li>Abre "Fluent Coach" desde el ícono. La primera vez que toques 🎤, permite el micrófono.</li><li>Si no oyes al coach: sube el volumen y desactiva el modo silencio.</li></ol><p class="small mut">Estado: ${isStandalone()?'✅ instalada como app':'en el navegador'} · ${window.isSecureContext?'🔒 conexión segura':'⚠️ sin https: el micrófono no funcionará'} · ${'serviceWorker' in navigator?'modo sin conexión disponible':'sin modo offline'}</p></div>
  <div class="card"><h3>💾 Datos</h3><div class="row"><button id="btnExport">⬇️ Exportar progreso</button><label class="small">Importar: <input type="file" id="fileImport" accept=".json"></label></div>
   <div class="row"><button id="btnDelKeys">🔑 Borrar mis claves</button><button id="btnReset" class="danger">🗑️ Borrar todo el progreso</button></div><p class="small mut">Tu progreso se guarda solo en este dispositivo. Exporta un respaldo de vez en cuando.</p></div>`;
@@ -1211,13 +1244,371 @@ function renderSettings(){const st=S.settings,p=AI_PRESETS[KEYS.aiPreset]||AI_PR
  $('#azTts').onchange=e=>{st.azTts=e.target.checked;save()};
  $('#thr').oninput=e=>{st.threshold=+e.target.value;$('#thV').textContent=st.threshold;save()};
  $('#maxW').onchange=e=>{st.maxWord=Math.max(1,Math.min(10,+e.target.value||5));save()};$('#maxP').onchange=e=>{st.maxPhrase=Math.max(1,Math.min(6,+e.target.value||3));save()};
- $('#autoLoop').onchange=e=>{st.autoLoop=e.target.checked;save()};$('#autoListen').onchange=e=>{st.autoListen=e.target.checked;save()};$('#tuSil').onchange=e=>{st.tuSilence=+e.target.value;save()};$('#tuSpeakCor').onchange=e=>{st.tuSpeakCor=e.target.checked;save()};$('#coachLang').onchange=e=>{st.coachLang=e.target.value;save()};
+ $('#autoLoop').onchange=e=>{st.autoLoop=e.target.checked;save()};$('#tuDrillS').onchange=e=>{st.tuDrill=e.target.checked;save()};$('#tuSlangS').onchange=e=>{st.tuSlang=e.target.checked;save()};bindMaterial();$('#autoListen').onchange=e=>{st.autoListen=e.target.checked;save()};$('#tuSil').onchange=e=>{st.tuSilence=+e.target.value;save()};$('#tuSpeakCor').onchange=e=>{st.tuSpeakCor=e.target.checked;save()};$('#coachLang').onchange=e=>{st.coachLang=e.target.value;save()};
  $('#rate').oninput=e=>{st.rate=+e.target.value;$('#rateV').textContent=st.rate+'x';save()};$('#rate').onchange=()=>speak('Así sueno ahora en inglés:',{lang:'es'}).then(()=>speak('Hi Yonathan! This is my new speed.'));
  $('#optIpa').onchange=e=>{st.ipa=e.target.checked;save()};$('#optEs').onchange=e=>{st.es=e.target.checked;save()};$('#optCoachEs').onchange=e=>{st.coachEs=e.target.checked;save()};$('#goal').onchange=e=>{st.goal=Math.max(5,+e.target.value||15);save()};
  $('#btnExport').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='fluent-coach-progreso-'+todayKey()+'.json';a.click()};
  $('#fileImport').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const o=JSON.parse(t);if(!o.days)throw 0;localStorage.setItem(KEY,t);load();updateHeader();alert('Progreso importado.')}catch(x){alert('Archivo no válido.')}})};
  $('#btnDelKeys').onclick=()=>{if(confirm('¿Borrar las claves de Azure y de IA de este dispositivo?')){KEYS.azKey='';KEYS.aiKey='';saveKeys();renderSettings()}};
  $('#btnReset').onclick=()=>{if(confirm('¿Seguro? Se borrará todo tu progreso (las claves se conservan).')){localStorage.removeItem(KEY);load();updateHeader();show('home')}}}
+
+/* ================= Natural speech layer: friendly phoneme talk + TTS sanitizer ================= */
+/* PH_SAY[p] = [example word, friendly spoken description (no symbols, no jargon)] */
+const PH_SAY={
+ 'i':['see','es una i larga y tensa: sonríe un poquito y estírala, como «siii»'],
+ 'ɪ':['sit','es una i cortita y relajada, casi entre i y e; no la estires'],
+ 'eɪ':['say','es como el "ei" de «rey»: empiezas en e y terminas en i'],
+ 'ɛ':['bed','es como la e de «perro», un poquito más abierta'],
+ 'æ':['cat','es una mezcla de a y e: abre la boca como para decir a, pero estira los labios como para decir e'],
+ 'ɑ':['hot','es una a bien abierta, como cuando el doctor te pide decir «aaa»'],
+ 'ɔ':['law','es una o abierta, con la boca bastante abierta'],
+ 'ʊ':['book','es una u cortita y floja, sin apretar los labios'],
+ 'oʊ':['go','es una o que se cierra hacia u, como «ou»'],
+ 'u':['food','es una u larga, con los labios redonditos'],
+ 'ʌ':['cup','es una a cortita y relajada, como si dijeras "a" sin ganas'],
+ 'aɪ':['my','es como el «ai» de «aire»'],
+ 'aʊ':['now','es como el «au» de «auto»'],
+ 'ɔɪ':['boy','es como el «oi» de «hoy»'],
+ 'ju':['you','suena como «iu», igual que en "you"'],
+ 'ə':['about','es una vocal muy suave y cortita, casi un murmullo, como una a relajada'],
+ 'ɝ':['bird','es una e que se mezcla con la r: la lengua se recoge hacia atrás sin tocar nada'],
+ 'ɚ':['teacher','al final suena como una r suave, con la lengua recogida, sin hacer e ni a'],
+ 'ɪɹ':['here','es una i corta que termina en r suave, como «jir»'],
+ 'ɛɹ':['hair','es una e que termina en r suave, como «jer»'],
+ 'ʊɹ':['tour','es una u corta que termina en r suave'],
+ 'aɪɹ':['fire','es como «ai» y luego una r suave, como «fáier»'],
+ 'aʊɹ':['hour','es como «au» y luego una r suave, como «áuer»'],
+ 'ɔɹ':['more','es una o seguida de una r suave, como «mor»'],
+ 'ɑɹ':['car','es una a abierta seguida de una r suave, como «kar»'],
+ 'w':['we','es como el «gu» de «huevo», con los labios redonditos al empezar'],
+ 'j':['yes','es como la y de «yo» pero más suave, como una i rápida'],
+ 'p':['pen','es una p con un soplido de aire al soltarla'],
+ 'b':['boy','es una b de verdad: junta bien los dos labios'],
+ 't':['time','es una t con la lengua arriba de los dientes y un soplidito de aire; entre vocales suena casi como una r suave'],
+ 'd':['day','es una d con la lengua arriba de los dientes, no entre ellos'],
+ 'k':['cat','es una k con un soplido de aire al soltarla'],
+ 'g':['go','es una g fuerte, como en «gato»'],
+ 'm':['man','es una m normal, cerrando bien los labios'],
+ 'n':['no','es una n normal; al final de la palabra no la pierdas'],
+ 'ŋ':['sing','es una n que se hace atrás, en la garganta, como en «tengo»; no agregues una g al final'],
+ 'f':['fine','es una f normal, con los dientes de arriba tocando el labio de abajo'],
+ 'v':['very','no es una b: pon los dientes de arriba sobre el labio de abajo y haz vibrar, como una f con voz'],
+ 'θ':['think','se hace con la lengua entre los dientes, soplando suave, como una ce de España'],
+ 'ð':['this','se hace con la lengua entre los dientes, pero con voz, como una d muy suave que vibra'],
+ 's':['see','es una s normal, sin agregar una e antes'],
+ 'z':['zoo','es una s con voz, que zumba como una abeja'],
+ 'ʃ':['she','es como cuando pides silencio, «shhh»'],
+ 'ʒ':['vision','es como el «shhh» pero con voz, como la ll de Argentina'],
+ 'h':['hello','es una jota muy suave, solo aire, como cuando empañas un espejo'],
+ 'tʃ':['church','es como la ch de «chocolate»'],
+ 'dʒ':['job','es como una ch pero con voz, como la y fuerte de «yo» en algunos países'],
+ 'l':['like','es una l normal; al final de la palabra la lengua sube y se queda un poquito'],
+ 'ɹ':['red','no es la r española: la lengua no toca nada, se recoge un poco hacia atrás']};
+function phSay(p){return PH_SAY[p]||PH_SAY[String(p).replace(/[ːˈˌ]/g,'')]||null}
+/* phrase bank: varied, warm Spanish */
+const SAYS={
+ almost:['Casi lo tienes.','Ya casi.','Vas muy bien, solo un detalle.','Estás muy cerca.','Bien intento, vamos a pulirlo.'],
+ good:['¡Eso es!','¡Perfecto, así suena!','¡Muy bien, ahora sí!','¡Así mero!','¡Excelente, te salió muy natural!','¡Qué bien sonó eso!'],
+ great:['¡Excelente!','¡Te salió muy bien!','¡Muy bien hecho!','¡Me encantó cómo sonó!'],
+ ok:['Muy bien.','Bastante bien.','Nada mal, vas bien.'],
+ listen:['Escúchame:','Pon atención:','Escucha cómo lo digo:','Oye bien:'],
+ again:['Otra vez, escúchame:','Vamos de nuevo, escucha:','Una vez más:','Inténtalo otra vez, escucha:'],
+ you:['Ahora tú.','Te toca.','Ahora dilo tú.','Va, tu turno.'],
+ repeat:['Repite después de mí.','Ahora repite conmigo.','Dilo conmigo.','Repítelo después de mí.'],
+ noHear:['No te escuché bien. ¿Lo intentamos otra vez?','Perdón, no te oí. Una vez más.','No alcancé a escucharte. Otra vez, por fa.'],
+ cont:['¡Listo! Sigamos con la conversación.','Muy bien, ahora seguimos platicando.','Perfecto, sigamos.'],
+ later:['No pasa nada, lo practicamos otra vez mañana.','Tranquilo, lo dejo en tu repaso y mañana sale mejor.','Buen esfuerzo. Lo repasamos mañana.']};
+const say=k=>pick(SAYS[k]||['']);
+/* where in the word is the sound */
+function phWhere(w,d){const ph=w&&w.phon||[];const i=ph.findIndex(x=>x.p===d.exp&&x.acc===d.acc);if(i<0||ph.length<3)return'';return i===0?'el sonido del principio':i===ph.length-1?'el sonido del final':'el sonido del medio'}
+/* natural Spanish spoken tip for the worst sound of a word; returns text with the English word in quotes (spoken by the English voice) */
+function friendlyTip(w,d,{first=true}={}){if(!d)return say('almost');const f=phSay(d.exp);const where=phWhere(w,d)||'ese sonido';
+ const ww=/^i$/i.test(w.w)?'I':w.w;let s=(first?say('almost')+' ':'')+`En "${ww}", ${where}`;
+ if(f)s+=` ${f[1]}.`;else s+=' necesita un poquito más de cuidado.';
+ if(d.heard){const h=phSay(d.heard);if(h&&h!==f)s+=` Me sonó más parecido al de "${h[0]}".`}
+ if(f&&f[0].toLowerCase()!==String(w.w).toLowerCase())s+=` Como en "${f[0]}".`;return s}
+/* stress described without symbols: syl array like ['ta','ble'], i = stressed index */
+function stressTip(word,syl,i){const pos=['primera','segunda','tercera','cuarta'][i]||'última';return `En "${word}", la fuerza va en la ${pos} parte: "${syl.map((x,k)=>k===i?x.toUpperCase():x).join('-')}".`}
+const ES_ONLY=new Set('el la los las de del que es mi tu su ella él yo soy eres está estoy estás son una uno unos unas con por para pero muy más también como qué dónde hay tiene tengo hermana hermano casa se lo le les nos ya y o u ahora bien significa dice'.split(' '));
+const ES_WORDS=new Set('a al de del el la las los lo le un una y o que en es no si sí se me te mi tu su ya muy más mas para por con sin como pero bien mal casi otra vez dilo eso esto ese esa'.split(' '));
+function ttsClean(t,lang='es'){if(t==null)return'';let s=String(t);const es=lang==='es';
+ s=s.replace(/<[^>]*>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,' y ').replace(/&lt;|&gt;/g,' ').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+ s=s.replace(/https?:\/\/\S+/g,es?'el enlace':'the link');
+ s=s.replace(/"([^"]+?)\s+vs\.?\s+([^"]+?)"/g,'"$1" o "$2"');
+ s=s.replace(/(\d+)\s*\/\s*(\d+)/g,es?'$1 de $2':'$1 out of $2');
+ s=s.replace(/\/([^\/\s]{1,14})\//g,(m,p,off,str)=>{const b=str[off-1]||' ',n=str[off+m.length]||' ';if(/[\p{L}\d]/u.test(b)||/[\p{L}\d]/u.test(n))return m;const f=phSay(p);if(!f&&!/[ɪʊʌəɜɚɝæɑɔθðʃʒŋˈˌːɾʔɡɹɛ]/.test(p))return m;return es&&f?`el sonido de "${f[0]}"`:''});
+ s=s.replace(/\bde el sonido\b/g,'del sonido');
+ s=s.replace(/\[[^\]]*\]/g,' ').replace(/[{}]/g,' ').replace(/\(([^)]*)\)/g,', $1,');
+ s=s.replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{FE0F}\u{200D}\u{20E3}\u2190-\u21FF\u2600-\u27BF\u2B00-\u2BFF]/gu,m=>/[\u2190-\u21FF]/.test(m)?(es?', mejor dicho, ':', '):' ');
+ s=s.replace(/-+>|=>/g,es?', mejor dicho, ':', ');
+ s=s.replace(/\bp\.\s?ej\.|\b[Ee]j\.|\b[Ee]j:|\b[Ee]j\b/g,es?'por ejemplo':'for example').replace(/\bvs\.?(?=\s)/gi,es?'o':'or').replace(/\betc\./gi,es?'etcétera':'etcetera').replace(/EE\.\s?UU\./g,'Estados Unidos').replace(/\bXP\b/g,es?'puntos':'points').replace(/\bAAVE\b/g,es?'inglés afroamericano':'African American English').replace(/\bIPA\b/g,'').replace(/\bIA\b/g,es?'inteligencia artificial':'AI');
+ s=s.replace(/\b(el|la|del)\s+(el|la)\s+(inglés)/gi,'$1 $3');
+ s=s.replace(/(\p{L}+)((?:-\p{L}+)+)/gu,(m)=>{const parts=m.split('-');const resp=parts.some(x=>x.length>=2&&x===x.toUpperCase()&&/\p{Lu}/u.test(x))||/[áéíóú]/.test(m);return resp?parts.join('').toLowerCase():parts.join(' ')});
+ s=s.replace(/\b([A-ZÁÉÍÓÚÑ]{2,})\b/g,(m)=>m==='OK'||m==='TV'?m:m.toLowerCase());
+ s=s.replace(/[ɪʊʌəɜɚɝæɑɔθðʃʒŋˈˌːɾʔɡɹɛ]+/g,'');
+ s=s.replace(/\*\*|__|`|#+|\*|~|\^|_|\||•|·|@|<|>/g,' ').replace(/\s=\s|=/g,es?' significa ':' means ').replace(/\+/g,es?' más ':' plus ').replace(/&/g,es?' y ':' and ').replace(/≈/g,es?'unos ':'about ');
+ s=s.replace(/\s\/\s|\//g,es?' o ':' or ').replace(/\s[-–—]\s/g,', ').replace(/^\s*[-–—]\s*/gm,'').replace(/\.{4,}/g,'...').replace(/([^.])\.\.(?!\.)/g,'$1.');
+ s=s.replace(/\s+([,.;:!?])/g,'$1').replace(/([,;:])\s*(?=[,;:.!?])/g,'').replace(/,{2,}/g,',').replace(/^[\s,.;:]+/,'').replace(/\s+/g,' ').trim();
+ return s}
+/* split Spanish speech so that quoted English words/phrases are read by the English voice */
+function ttsSegments(t,lang='es'){const s=ttsClean(t,lang);if(lang!=='es')return s?[{lang:'en',text:s.replace(/["“”«»]/g,'')}]:[];
+ const out=[];const re=/["“”]([^"“”]{1,80})["“”]/g;let last=0,m;
+ const isEn=x=>(x==='I'||x.length>=2&&/[aeiouy]/i.test(x)&&!x.split(/[\s,.!?]+/).some(w=>ES_ONLY.has(w.toLowerCase())))&&/^[A-Za-z][A-Za-z' ,.!?\-]*$/.test(x)&&!x.split(/\s+/).every(w=>ES_WORDS.has(w.toLowerCase()))&&(x==='I'||!/^(?:[aeiou]|sh+|a+|s+i+)$/i.test(x.trim()));
+ while((m=re.exec(s))){const pre=s.slice(last,m.index);if(isEn(m[1].trim())){if(pre.trim())out.push({lang:'es',text:pre.trim()});out.push({lang:'en',text:m[1].trim()})}else{out.push({lang:'es',text:(pre+m[1]).trim()})}last=re.lastIndex}
+ const rest=s.slice(last).trim();if(rest)out.push({lang:'es',text:rest});
+ const merged=[];for(const x of out){x.text=x.text.replace(/["“”«»]/g,'').trim();if(!x.text||/^[,.;:!?\s]+$/.test(x.text))continue;const p=merged[merged.length-1];if(p&&p.lang===x.lang)p.text+=' '+x.text;else merged.push(x)}
+ return merged}
+
+/* spoken (friendly) versions of the v1 sound tips */
+const SOUNDS_SAY={th:'La th de "think" y "this": saca la puntita de la lengua entre los dientes. "think" no es tink ni sink.',
+ s:'Cuando una palabra empieza con s y otra consonante, como "school" o "speak", no le pongas una e al principio. Empieza alargando la s.',
+ v:'La v de "very" no es una b: pon los dientes de arriba sobre el labio de abajo y haz que vibre.',
+ ed:'Cuando el verbo termina en e de, casi nunca se dice la e. "worked" suena como uérkt, y "played" como pléid.',
+ final:'No te comas la última consonante. Di "last" con su t al final, y "world" con su d.',
+ i:'Hay dos íes en inglés: una cortita y relajada, como en "ship", y otra larga, como en "sheep", donde sonríes y la estiras.',
+ sh:'La sh de "she" es como cuando pides silencio, un soplido suave. No la cambies por la ch de "chair".',
+ z:'Muchas eses en inglés zumban como abeja, como en "is" y "easy". Pon la mano en la garganta y siente cómo vibra.',
+ h:'La h de "hello" es solo aire suave, como cuando empañas un vidrio. No es una jota fuerte.',
+ r:'La r inglesa no vibra: la lengua no toca nada, se recoge un poquito hacia atrás.',
+ schwa:'Las partes débiles de la palabra se dicen suavecito y rápido. En "about", la primera a casi ni se oye, y la fuerza va en la segunda parte.',
+ dy:'La j de "job" y "just" es como una ch con voz, no como la jota del español.',
+ w:'La w de "would" y "work" empieza con los labios redonditos, como una u rápida. No le pongas una g.',
+ ae:'La a de "cat" es una mezcla de a y e: abre la boca y estira los labios a la vez.',
+ u:'Hay dos úes: una cortita y floja, como en "good", y otra larga y redondita, como en "food".'};
+
+/* ================= GRAMÁTICA: curriculum A1 → B2 (explicaciones en español) ================= */
+/* unit: id, lvl, t (título), sum (resumen hablado corto), ex: [en, pr, es], pts: puntos (HTML seguro, español), quiz: [pregunta, [opciones], índice correcto, por qué] */
+const GRAM=[
+{id:'be',lvl:'A1',t:'Verbo "to be" (ser / estar)',sum:'El verbo to be significa ser o estar. Se dice I am, you are, he is, she is, it is, we are, they are. En inglés siempre necesitas el sujeto: no se dice is good, se dice it is good.',
+ pts:['<b>I am</b> (aim) · <b>you are</b> (yu ar) · <b>he/she/it is</b> (iz) · <b>we/they are</b>','Contracciones al hablar: I\'m, you\'re, he\'s, she\'s, it\'s, we\'re, they\'re.','Negativo: I\'m not, he isn\'t (ízant), they aren\'t (árant).','Pregunta: invierte el orden: <b>Are you</b> tired? <b>Is she</b> here?','Edad y sensaciones van con be: I\'m 30, I\'m hungry, I\'m cold (no "I have 30").','¡Nunca omitas el sujeto! "It\'s raining", "It\'s important".'],
+ ex:[['I am from Mexico.','ai am from méksikou.','Soy de México.'],['She is my sister.','shi iz mai sístar.','Ella es mi hermana.'],['We are tired today.','uí ar táierd tudéi.','Estamos cansados hoy.'],['Is he at home?','iz ji at jóum?','¿Está él en casa?'],['I\'m not hungry.','aim nat jángri.','No tengo hambre.'],['It\'s very important.','its véri impórtant.','Es muy importante.']],
+ quiz:[['___ 30 years old.',['I have','I am','I\'m have'],1,'La edad se dice con be: I am 30.'],['They ___ my friends.',['is','are','am'],1,'They va con are.'],['___ raining.',['Is','It\'s','Es'],1,'En inglés siempre hay sujeto: It\'s raining.']]},
+{id:'pron',lvl:'A1',t:'Pronombres (I/me/my/mine)',sum:'Hay pronombres de sujeto: I, you, he, she, it, we, they. De objeto, después del verbo: me, you, him, her, it, us, them. Y posesivos: my, your, his, her, our, their.',
+ pts:['Sujeto: <b>I, you, he, she, it, we, they</b>','Objeto (después del verbo o preposición): <b>me, you, him, her, it, us, them</b> → "Call <b>me</b>", "with <b>her</b>".','Posesivo + sustantivo: <b>my, your, his, her, its, our, their</b> car.','Posesivo solo: <b>mine, yours, his, hers, ours, theirs</b> → "It\'s mine".','<b>His</b> = de él, <b>her</b> = de ella (en español "su" sirve para todo; en inglés no).','"It" es para cosas y animales; no lo omitas.'],
+ ex:[['Can you help me?','kan yu jélp mi?','¿Me puedes ayudar?'],['I love her family.','ai lav jer fámili.','Amo a su familia (de ella).'],['This is his car.','dhis iz jiz kar.','Este es el carro de él.'],['That book is mine.','dhat buk iz máin.','Ese libro es mío.'],['We called them yesterday.','uí kold dhem iésterdei.','Los llamamos ayer.']],
+ quiz:[['Maria lost ___ phone.',['his','her','she'],1,'De ella = her.'],['Tell ___ the truth.',['I','me','my'],1,'Después del verbo va el objeto: me.'],['Is this pen ___?',['your','yours','you'],1,'Posesivo solo, sin sustantivo: yours.']]},
+{id:'art',lvl:'A1',t:'Artículos a / an / the',sum:'A y an significan un o una. Usa a antes de sonido de consonante y an antes de sonido de vocal. The es el o la, para algo específico. Para hablar en general no uses the: life is beautiful.',
+ pts:['<b>a</b> + sonido de consonante: a car, a university (iu suena "y").','<b>an</b> + sonido de vocal: an apple, an hour (la h es muda).','<b>the</b> (dha, o dhi antes de vocal) = algo específico o ya mencionado.','En general, sin artículo: "<b>Life</b> is short", "I like <b>music</b>", "<b>People</b> are nice".','Profesiones llevan a/an: "I\'m <b>an</b> engineer" (en español: "soy ingeniero").'],
+ ex:[['I\'m an engineer.','aim an endyiníer.','Soy ingeniero.'],['She has a dog and a cat.','shi jæz a dog ænd a kæt.','Ella tiene un perro y un gato.'],['The dog is very friendly.','dha dog iz véri fréndli.','El perro es muy amigable.'],['Life is beautiful.','láif iz biúrifal.','La vida es hermosa.'],['It takes an hour.','it téiks an áuer.','Toma una hora.']],
+ quiz:[['I am ___ teacher.',['—','a','an'],1,'Profesión con a/an: I\'m a teacher.'],['___ money is not everything.',['The','—','A'],1,'En general, sin the.'],['It\'s ___ honor.',['a','an','the'],1,'Honor empieza con sonido de vocal (h muda): an.']]},
+{id:'pres',lvl:'A1',t:'Presente simple · do / does / don\'t / doesn\'t · tercera persona -s',sum:'El presente simple es para rutinas y verdades. Con he, she e it el verbo lleva s: she works. Para preguntas usa do o does, y para negar don\'t o doesn\'t. Ojo con la pronunciación: do se dice duu, does se dice das, y doesn\'t se dice dázant. Después de does o doesn\'t, el verbo va sin s.',
+ pts:['I/you/we/they <b>work</b> · he/she/it <b>works</b> (uérks).','Pregunta: <b>Do</b> you work? (du yu) · <b>Does</b> she work? (daz shi) — el verbo pierde la -s.','Negativo: I <b>don\'t</b> (dóunt) like it · He <b>doesn\'t</b> (dázant) like it.','🔊 <b>do</b> /duː/ = "duu" · <b>does</b> /dʌz/ = "daz" (¡no "dous"!) · <b>don\'t</b> /doʊnt/ = "dóunt" · <b>doesn\'t</b> /ˈdʌzənt/ = "dázant".','Irregulares: have → <b>has</b> (jæz), go → <b>goes</b> (góuz), do → <b>does</b> (daz).','❌ "She don\'t like" → ✅ "She doesn\'t like". ❌ "Does he works?" → ✅ "Does he work?"'],
+ ex:[['She works in a hospital.','shi uérks in a jóspital.','Ella trabaja en un hospital.'],['Do you speak English?','du yu spíik ínglish?','¿Hablas inglés?'],['Does he live here?','daz ji liv jíer?','¿Él vive aquí?'],['I don\'t drink coffee.','ai dóunt drink kófi.','No tomo café.'],['My brother doesn\'t eat meat.','mai bráder dázant íit míit.','Mi hermano no come carne.'],['He has two kids.','ji jæz tuu kidz.','Él tiene dos hijos.']],
+ quiz:[['She ___ in Texas.',['live','lives','living'],1,'He/she/it + verbo con -s.'],['___ he like pizza?',['Do','Does','Is'],1,'Con he/she/it la pregunta usa does.'],['He doesn\'t ___ English.',['speaks','speak','speaking'],1,'Después de doesn\'t el verbo va sin -s.']]},
+{id:'spron',lvl:'A1',t:'Pronunciación de la -s final (/s/, /z/, /ɪz/)',sum:'La s final de plurales y de la tercera persona tiene tres sonidos. Suena s después de sonidos sordos como p, t, k, f: works, cats. Suena z, como abeja, después de sonidos con voz y vocales: plays, dogs. Y suena iz después de s, z, sh, ch, y dy: watches, buses.',
+ pts:['<b>/s/</b> tras p, t, k, f, θ: works (uérks), cats (kæts), stops.','<b>/z/</b> (zumbido) tras vocales y sonidos sonoros b, d, g, l, m, n, r, v: plays (pléiz), dogs (dogz), lives (livz).','<b>/ɪz/</b> (una sílaba más) tras s, z, sh, ch, dʒ: watches (uáchiz), buses (básiz), changes (chéindyiz).','Lo mismo para posesivos: Tom\'s (tamz), Mike\'s (máiks).'],
+ ex:[['He works and plays.','ji uérks ænd pléiz.','Él trabaja y juega.'],['She watches the news.','shi uáchiz dha nuuz.','Ella ve las noticias.'],['My dogs love cats.','mai dogz lav kæts.','Mis perros aman a los gatos.'],['It changes every day.','it chéindyiz évri déi.','Cambia todos los días.']],
+ quiz:[['¿Cómo suena la -s de "plays"?',['/s/','/z/','/ɪz/'],1,'Después de vocal suena /z/.'],['¿Y la de "watches"?',['/s/','/z/','/ɪz/'],2,'Después de ch se agrega una sílaba: /ɪz/.'],['¿Y la de "works"?',['/s/','/z/','/ɪz/'],0,'Después de k (sorda) suena /s/.']]},
+{id:'cont',lvl:'A1',t:'Presente continuo (estoy haciendo)',sum:'El presente continuo es para lo que pasa ahora mismo o planes cercanos. Se forma con am, is o are más el verbo con ing: I am working, she is eating. La terminación ing se dice como "ing" con la n por la nariz, sin pronunciar una g fuerte.',
+ pts:['am/is/are + verbo-<b>ing</b>: I\'m working, she\'s eating, they\'re playing.','Ahora mismo: "What <b>are you doing</b>?" · Planes: "I\'<b>m meeting</b> him tomorrow".','Rutina = presente simple; ahora = continuo: "I work every day, but today I\'m resting".','Pronunciación: -ing /ɪŋ/ → "in(g)" suave por la nariz.','Verbos de estado casi no van en -ing: know, like, want, need ("I want", no "I\'m wanting").'],
+ ex:[['What are you doing?','uát ar yu dúuing?','¿Qué estás haciendo?'],['I\'m cooking dinner.','aim kúking díner.','Estoy haciendo la cena.'],['She\'s talking on the phone.','shiz tóking on dha fóun.','Ella está hablando por teléfono.'],['We\'re meeting tomorrow.','uír míiting tumárou.','Nos vemos mañana.'],['It\'s raining right now.','its réining ráit náu.','Está lloviendo ahora mismo.']],
+ quiz:[['Listen! The baby ___.',['cries','is crying','cry'],1,'Ahora mismo → presente continuo.'],['I ___ the answer.',['am knowing','know','knowing'],1,'"Know" es verbo de estado: I know.'],['They ___ TV now.',['watch','are watching','is watching'],1,'They + are + -ing.']]},
+{id:'qn',lvl:'A2',t:'Preguntas y negativos',sum:'Para preguntar en inglés casi siempre necesitas un auxiliar antes del sujeto: do, does, did, is, are, can, will. Por ejemplo: Where do you live? Para negar, el not va con el auxiliar: I don\'t know, she can\'t come.',
+ pts:['Orden: (Wh-) + auxiliar + sujeto + verbo: "<b>Where do you</b> work?", "<b>What did she</b> say?"','Con be no hace falta do: "Where <b>are you</b>?"','Palabras Wh-: what (uát), where (uér), when (uén), why (uái), who (juu), how (jáu), how much / how many.','Negativo: auxiliar + not: don\'t, doesn\'t, didn\'t, isn\'t, can\'t (kænt), won\'t (uóunt).','❌ "Where you live?" → ✅ "Where do you live?"','Doble negación no: ❌ "I don\'t know nothing" → ✅ "I don\'t know anything".'],
+ ex:[['Where do you live?','uér du yu liv?','¿Dónde vives?'],['What did she say?','uát did shi séi?','¿Qué dijo ella?'],['How much is it?','jáu mach iz it?','¿Cuánto cuesta?'],['I don\'t know anything.','ai dóunt nóu éniding.','No sé nada.'],['Why can\'t you come?','uái kænt yu kam?','¿Por qué no puedes venir?']],
+ quiz:[['Where ___ you work?',['—','do','does'],1,'Falta el auxiliar: Where do you work?'],['She ___ come yesterday.',['didn\'t','doesn\'t','don\'t'],0,'Ayer → pasado → didn\'t.'],['I don\'t have ___.',['nothing','anything','no'],1,'Con negativo usa anything.']]},
+{id:'ptime',lvl:'A1',t:'Preposiciones de tiempo: in / on / at',sum:'Para el tiempo: at es para horas exactas, at seven. On es para días y fechas, on Monday. In es para meses, años, estaciones y partes del día: in July, in the morning. Pero se dice at night.',
+ pts:['<b>at</b> + hora: at 7:00, at noon, <b>at night</b>, at the weekend (británico).','<b>on</b> + día/fecha: on Monday, on May 5th, on my birthday, on the weekend (EE. UU.).','<b>in</b> + mes/año/estación/parte del día: in July, in 2026, in summer, in the morning.','<b>in</b> + periodo futuro: "I\'ll be back <b>in</b> ten minutes" (dentro de).','Sin preposición: today, tomorrow, yesterday, next week, last year, every day.'],
+ ex:[['The meeting is at nine.','dha míiting iz at náin.','La reunión es a las nueve.'],['I was born in 1990.','ai uás born in náintiin náinti.','Nací en 1990.'],['See you on Monday.','síi yu on mándei.','Nos vemos el lunes.'],['I work in the morning.','ai uérk in dha mórning.','Trabajo en la mañana.'],['I\'ll call you in ten minutes.','ail kol yu in ten mínits.','Te llamo en diez minutos.']],
+ quiz:[['My birthday is ___ June.',['on','in','at'],1,'Meses con in.'],['The class starts ___ 8:30.',['in','on','at'],2,'Horas con at.'],['See you ___ Friday.',['in','on','at'],1,'Días con on.']]},
+{id:'pplace',lvl:'A1',t:'Preposiciones de lugar: in / on / at',sum:'Para lugares: in es dentro de algo, in the car, in Mexico. On es sobre una superficie, on the table, y también on the bus. At es un punto o lugar específico: at home, at work, at the door.',
+ pts:['<b>in</b> = dentro: in the box, in the car, in Texas, in the kitchen.','<b>on</b> = sobre una superficie: on the table, on the wall, on the floor; transporte grande: on the bus, on the plane.','<b>at</b> = punto o sitio de actividad: <b>at home</b>, at work, at school, at the airport, at the door.','Direcciones: <b>on</b> Main Street, <b>at</b> 25 Main Street.','En español todo es "en"; en inglés elige según la idea.'],
+ ex:[['I\'m at home.','aim at jóum.','Estoy en casa.'],['The keys are on the table.','dha kíiz ar on dha téibal.','Las llaves están en la mesa.'],['She lives in Houston.','shi livz in jiúston.','Ella vive en Houston.'],['I\'m on the bus.','aim on dha bas.','Voy en el autobús.'],['Wait for me at the door.','uéit for mi at dha dor.','Espérame en la puerta.']],
+ quiz:[['I\'m ___ work right now.',['in','on','at'],2,'Lugar de actividad: at work.'],['The picture is ___ the wall.',['in','on','at'],1,'Superficie: on the wall.'],['He lives ___ Chicago.',['in','on','at'],0,'Ciudades: in.']]},
+{id:'past',lvl:'A2',t:'Pasado simple · -ed y did / didn\'t',sum:'El pasado simple es para acciones terminadas: yesterday I worked. Los verbos regulares terminan en ed. Para preguntar usa did, did you work?, y para negar didn\'t, I didn\'t work. Después de did y didn\'t el verbo vuelve a su forma base.',
+ pts:['Regular: work → <b>worked</b>, play → <b>played</b>, study → <b>studied</b>.','Pregunta: <b>Did</b> you go? · Negativo: I <b>didn\'t</b> (dídant) go.','❌ "Did you went?" → ✅ "Did you go?" · ❌ "I didn\'t saw" → ✅ "I didn\'t see".','Muchos verbos comunes son irregulares (go → went): mira la tabla de verbos irregulares.','Marcadores: yesterday, last week, ago (two days ago), in 2020.'],
+ ex:[['I worked yesterday.','ai uérkt iésterdei.','Trabajé ayer.'],['Did you call her?','did yu kol jer?','¿La llamaste?'],['We didn\'t go out.','uí dídant góu áut.','No salimos.'],['She studied a lot.','shi stádid a lat.','Ella estudió mucho.'],['They arrived two hours ago.','dhei aráivd tuu áuerz agóu.','Llegaron hace dos horas.']],
+ quiz:[['Did you ___ the movie?',['saw','see','seen'],1,'Después de did: forma base.'],['I ___ TV last night.',['watch','watched','watching'],1,'Pasado regular: watched.'],['She ___ come to class.',['didn\'t','don\'t','wasn\'t'],0,'Negativo pasado: didn\'t + base.']]},
+{id:'edpron',lvl:'A2',t:'Pronunciación de -ed (/t/, /d/, /ɪd/)',sum:'La terminación ed casi nunca se dice "ed". Suena t después de sonidos sordos: worked se dice uérkt. Suena d después de sonidos con voz: played se dice pléid. Y solo suena id después de t o d: wanted, needed.',
+ pts:['<b>/t/</b> tras p, k, f, s, sh, ch, θ: worked (uérkt), stopped (stapt), watched (uácht), laughed (læft).','<b>/d/</b> tras vocales y sonidos sonoros: played (pléid), called (kold), lived (livd), opened (óupand).','<b>/ɪd/</b> (sílaba extra) SOLO tras t o d: wanted (uántid), needed (níidid), started (stártid).','Error típico: decir "work-ed", "play-ed". ¡No agregues sílaba!'],
+ ex:[['I worked all day.','ai uérkt ol déi.','Trabajé todo el día.'],['We played soccer.','uí pléid sáker.','Jugamos fútbol.'],['She wanted to stay.','shi uántid tu stéi.','Ella quería quedarse.'],['He watched a movie.','ji uácht a múuvi.','Él vio una película.'],['They needed help.','dhei níidid jelp.','Necesitaban ayuda.']],
+ quiz:[['"worked" suena…',['uérk-ed','uérkt','uérkid'],1,'Tras k suena /t/.'],['"wanted" suena…',['uántid','uánt','uántd'],0,'Tras t se agrega /ɪd/.'],['"played" suena…',['pléied','pléit','pléid'],2,'Tras vocal suena /d/.']]},
+{id:'pcont',lvl:'A2',t:'Pasado continuo (estaba haciendo)',sum:'El pasado continuo describe algo que estaba pasando en un momento del pasado. Se forma con was o were más el verbo con ing: I was sleeping. Muchas veces se interrumpe con un pasado simple: I was sleeping when you called.',
+ pts:['was/were + -ing: I <b>was</b> working, they <b>were</b> eating.','Acción interrumpida: "I <b>was cooking</b> when the phone <b>rang</b>".','Dos acciones a la vez: "<b>While</b> I was driving, she was sleeping".','Pronunciación: was = "uás" (débil: "uaz"), were = "uér".'],
+ ex:[['I was sleeping when you called.','ai uás slíiping uén yu kold.','Estaba dormido cuando llamaste.'],['What were you doing?','uát uér yu dúuing?','¿Qué estabas haciendo?'],['It was raining all night.','it uás réining ol náit.','Estuvo lloviendo toda la noche.'],['We were watching TV.','uí uér uáching tiví.','Estábamos viendo la tele.']],
+ quiz:[['I ___ dinner when he arrived.',['cooked','was cooking','am cooking'],1,'Acción en progreso interrumpida: was cooking.'],['They ___ playing.',['was','were','are'],1,'They + were.']]},
+{id:'irreg',lvl:'A2',t:'Los 80 verbos irregulares más comunes',sum:'Los verbos más usados del inglés son irregulares: go, went, gone. Apréndelos en grupos de cinco, en voz alta y con su pronunciación. Abajo tienes la tabla completa con audio.',
+ pts:['Columna 1 = base (presente), 2 = pasado simple, 3 = participio (para have + participio).','Apréndelos por grupos que suenan parecido: sing-sang-sung, ring-rang-rung, drink-drank-drunk.','Toca 🔊 en cada fila y repite los tres en voz alta.'],
+ ex:[['I went to the store.','ai uént tu dha stor.','Fui a la tienda.'],['She told me the truth.','shi tóuld mi dha truuth.','Ella me dijo la verdad.'],['We bought a new car.','uí bot a nuu kar.','Compramos un carro nuevo.'],['I have seen that movie.','ai jæv síin dhat múuvi.','He visto esa película.'],['He forgot my name.','ji forgát mai néim.','Él olvidó mi nombre.']],
+ quiz:[['Past of "buy":',['buyed','bought','brought'],1,'buy → bought → bought (bot).'],['Past of "think":',['thinked','thought','taught'],1,'think → thought (thot).'],['Participle of "go":',['went','gone','goed'],1,'go → went → gone.']]},
+{id:'fut',lvl:'A2',t:'Futuro: will y going to',sum:'Para el futuro tienes dos formas. Going to es para planes que ya decidiste: I\'m going to travel. Will es para decisiones en el momento, promesas y predicciones: I\'ll help you. Al hablar rápido, going to suena "góna".',
+ pts:['<b>going to</b> = plan/intención: "I\'m <b>going to</b> study tonight" (hablado: "gonna" = góna).','<b>will</b> = decisión al momento, promesa, oferta: "I\'<b>ll</b> call you", "I <b>won\'t</b> (uóunt) tell anyone".','Predicción con evidencia → going to: "Look at the clouds! It\'s going to rain".','Después de will: verbo base: ❌ "I will to go" → ✅ "I will go".','Con when/if usa presente: ✅ "When I <b>get</b> home, I\'ll call you" (no "when I will get").'],
+ ex:[['I\'m going to travel next month.','aim góuing tu trável nekst manth.','Voy a viajar el próximo mes.'],['I\'ll help you.','ail jelp yu.','Te ayudo.'],['It\'s going to rain.','its góna réin.','Va a llover.'],['I won\'t forget.','ai uóunt forgét.','No lo olvidaré.'],['When I get home, I\'ll call you.','uén ai guet jóum, ail kol yu.','Cuando llegue a casa, te llamo.']],
+ quiz:[['The phone is ringing. — I ___ get it!',['\'ll','am going to','will to'],0,'Decisión al momento: I\'ll.'],['When I ___ there, I\'ll text you.',['will get','get','got'],1,'Después de when va presente.'],['I ___ visit my mom this weekend (ya lo planeé).',['will','am going to','going'],1,'Plan decidido: going to.']]},
+{id:'comp',lvl:'A2',t:'Comparativos y superlativos',sum:'Para comparar: palabras cortas llevan er y than, bigger than. Palabras largas usan more, more expensive than. Para el máximo: the biggest, the most expensive. Irregulares: good, better, the best. Bad, worse, the worst.',
+ pts:['Cortas: tall → <b>taller than</b> → <b>the tallest</b>; big → bigger (dobla la consonante).','Terminadas en -y: easy → <b>easier</b> → the easiest.','Largas: <b>more</b> interesting <b>than</b> → <b>the most</b> interesting.','Irregulares: good → <b>better</b> → <b>the best</b>; bad → <b>worse</b> (uérs) → <b>the worst</b>; far → farther.','❌ "more better" → ✅ "better". Igualdad: "as tall <b>as</b>".','than se dice "dhan" (débil: "dhen").'],
+ ex:[['My brother is taller than me.','mai bráder iz tóler dhan mi.','Mi hermano es más alto que yo.'],['This is the best pizza in town.','dhis iz dha best píitsa in táun.','Esta es la mejor pizza del pueblo.'],['English is easier than I thought.','ínglish iz íizier dhan ai thot.','El inglés es más fácil de lo que pensaba.'],['It\'s more expensive than before.','its mor ikspénsiv dhan bifór.','Es más caro que antes.'],['Today is worse than yesterday.','tudéi iz uérs dhan iésterdei.','Hoy está peor que ayer.']],
+ quiz:[['This car is ___ than mine.',['more fast','faster','fastest'],1,'Palabra corta: faster than.'],['She is the ___ student.',['better','best','most good'],1,'Superlativo de good: the best.'],['It\'s ___ than I expected.',['more better','better','gooder'],1,'Nunca "more better".']]},
+{id:'modal',lvl:'B1',t:'Modales: can, could, should, must, would, might',sum:'Los modales cambian el sentido del verbo. Can es poder, could es podría o pude, should es debería, must es deber obligatorio, would es el condicional o para pedir con cortesía, y might es quizás. Después de un modal el verbo va en forma base, sin to y sin s.',
+ pts:['<b>can</b> (kæn) = poder/saber · <b>can\'t</b> (kænt) = no poder.','<b>could</b> (kud, la l es muda) = podría / pude / petición cortés: "Could you help me?"','<b>should</b> (shud) = debería (consejo): "You should rest".','<b>must</b> = obligación fuerte o deducción: "You must wear a seatbelt".','<b>would</b> (uud) = -ría: "I would like…" = "I\'d like…" (me gustaría).','<b>might</b> (máit) = quizás: "It might rain".','Reglas: modal + base. ❌ "She cans", "I must to go" → ✅ "She can", "I must go".'],
+ ex:[['Can you speak slowly?','kæn yu spíik slóuli?','¿Puedes hablar despacio?'],['Could you help me, please?','kud yu jelp mi, plíiz?','¿Podrías ayudarme, por favor?'],['You should drink more water.','yu shud drink mor uóter.','Deberías tomar más agua.'],['I\'d like a coffee, please.','aid láik a kófi, plíiz.','Me gustaría un café, por favor.'],['It might rain later.','it máit réin léiter.','Quizás llueva más tarde.'],['You must wear a seatbelt.','yu mast uér a síitbelt.','Debes usar el cinturón.']],
+ quiz:[['You ___ see a doctor (consejo).',['should','might','can'],0,'Consejo = should.'],['She ___ swim very well.',['cans','can','can to'],1,'Modal sin -s y sin to.'],['___ you open the window, please?',['Must','Could','Should'],1,'Petición cortés: Could you…?']]},
+{id:'pperf',lvl:'B1',t:'Presente perfecto (have + participio)',sum:'El presente perfecto conecta el pasado con el presente. Se forma con have o has más el participio: I have lived here for five years. Se usa para experiencias, con ever y never, y con for y since. Si dices cuándo pasó, como yesterday, usa pasado simple.',
+ pts:['have/has + participio: I <b>have worked</b>, she <b>has been</b>, they <b>have seen</b>.','Experiencias: "<b>Have you ever been</b> to New York?" "I\'ve <b>never</b> tried sushi".','Duración hasta hoy: <b>for</b> + tiempo (for five years) · <b>since</b> + punto de inicio (since 2020).','❌ "I live here since 2020" → ✅ "I <b>have lived</b> here since 2020".','Con tiempo terminado usa pasado: ❌ "I have seen him yesterday" → ✅ "I saw him yesterday".','just / already / yet: "I\'ve <b>just</b> arrived", "Have you finished <b>yet</b>?"'],
+ ex:[['I have lived here for five years.','ai jæv livd jíer for fáiv yíerz.','Vivo aquí desde hace cinco años.'],['Have you ever been to New York?','jæv yu éver bin tu nuu york?','¿Alguna vez has estado en Nueva York?'],['She has never tried sushi.','shi jæz néver tráid súushi.','Ella nunca ha probado el sushi.'],['I\'ve just finished.','aiv dyast fínisht.','Acabo de terminar.'],['We have known each other since 2015.','uí jæv nóun íich ádher sins tuénti fiftíin.','Nos conocemos desde 2015.']],
+ quiz:[['I ___ here since 2019.',['live','have lived','lived'],1,'Desde un punto hasta hoy: have lived.'],['She has worked here ___ ten years.',['since','for','from'],1,'Duración: for.'],['I ___ him yesterday.',['have seen','saw','seen'],1,'Tiempo terminado (yesterday): pasado simple.']]},
+{id:'prep2',lvl:'B1',t:'Preposiciones: to / for, of / from, by / with, about',sum:'Algunas preposiciones confunden mucho. To indica dirección o destino, go to work. For es para, o durante un tiempo, for two hours. Of es de, como parte o pertenencia, a cup of coffee. From es de origen, I\'m from Mexico. By es por o junto a, by car. With es con. About es sobre o acerca de.',
+ pts:['<b>to</b> = a/hacia (destino): go <b>to</b> work, talk <b>to</b> me. <b>for</b> = para/por (propósito, beneficiario, duración): a gift <b>for</b> you, <b>for</b> two hours.','❌ "I came here for study" → ✅ "I came here <b>to</b> study" (para + verbo = <b>to</b>).','<b>of</b> = de (parte, contenido): a cup <b>of</b> coffee, the end <b>of</b> the movie. <b>from</b> = de (origen, desde): I\'m <b>from</b> Mexico, <b>from</b> 9 <b>to</b> 5.','<b>by</b> = en (medio de transporte), por (autor), junto a, para (fecha límite): <b>by</b> car, <b>by</b> Friday, a book <b>by</b> Coelho. <b>with</b> = con: <b>with</b> my friends.','<b>about</b> = sobre/acerca de: talk <b>about</b>, think <b>about</b>, a movie <b>about</b> love.'],
+ ex:[['I came here to study.','ai kéim jíer tu stádi.','Vine aquí a estudiar.'],['This gift is for you.','dhis guift iz for yu.','Este regalo es para ti.'],['I\'m from Mexico.','aim from méksikou.','Soy de México.'],['I go to work by car.','ai góu tu uérk bai kar.','Voy al trabajo en carro.'],['Let\'s talk about it.','lets tok abáut it.','Hablemos de eso.'],['I need it by Friday.','ai níid it bai fráidei.','Lo necesito para el viernes.']],
+ quiz:[['I went there ___ buy food.',['for','to','for to'],1,'Para + verbo = to.'],['We traveled ___ bus.',['with','in','by'],2,'Medio de transporte: by bus.'],['What is the movie ___?',['of','about','from'],1,'Tema: about.']]},
+{id:'prep3',lvl:'B1',t:'Verbo + preposición y adjetivo + preposición',sum:'Muchos verbos y adjetivos van con una preposición fija que no siempre coincide con el español. Por ejemplo: depend on, no depend of. Listen to music. Wait for. Married to. Interested in. Good at. Afraid of. Apréndelas como bloques.',
+ pts:['Verbo + prep: <b>depend on</b> · <b>listen to</b> · <b>wait for</b> · <b>look for</b> (buscar) · <b>look at</b> (mirar) · <b>ask for</b> (pedir) · <b>pay for</b> · <b>think about/of</b> · <b>dream about</b> · <b>arrive at/in</b> · <b>belong to</b> · <b>agree with</b> · <b>apply for</b> · <b>talk to</b>.','Sin preposición (falsos amigos): <b>discuss</b> (no "discuss about"), <b>call</b> someone (no "call to"), <b>enter</b> a room, <b>marry</b> someone.','Adjetivo + prep: <b>interested in</b> · <b>good at</b> · <b>bad at</b> · <b>afraid of</b> · <b>tired of</b> · <b>proud of</b> · <b>married to</b> · <b>different from</b> · <b>similar to</b> · <b>angry with/at</b> · <b>excited about</b> · <b>worried about</b> · <b>responsible for</b> · <b>famous for</b>.','Después de preposición, verbo con -ing: "I\'m good at <b>cooking</b>", "Thanks for <b>helping</b>".'],
+ ex:[['It depends on the weather.','it dipéndz on dha uéder.','Depende del clima.'],['I\'m listening to music.','aim lísening tu miúzik.','Estoy escuchando música.'],['We\'re waiting for the bus.','uír uéiting for dha bas.','Estamos esperando el autobús.'],['She is married to a doctor.','shi iz mérid tu a dákter.','Ella está casada con un doctor.'],['I\'m interested in history.','aim íntrestid in jístori.','Me interesa la historia.'],['He\'s really good at cooking.','jiz ríli gud at kúking.','Él es muy bueno cocinando.']],
+ quiz:[['It depends ___ you.',['of','on','from'],1,'depend on.'],['I\'m afraid ___ dogs.',['to','of','from'],1,'afraid of.'],['Let\'s discuss ___ the plan.',['about','—','of'],1,'discuss no lleva preposición.']]},
+{id:'phrasal',lvl:'B1',t:'Phrasal verbs esenciales',sum:'Los phrasal verbs son verbo más partícula, y cambian el significado: get up es levantarse, give up es rendirse, find out es descubrir. Los nativos los usan todo el tiempo, así que apréndelos con ejemplos.',
+ pts:['<b>get up</b> levantarse · <b>wake up</b> despertar · <b>give up</b> rendirse/dejar · <b>find out</b> enterarse · <b>look for</b> buscar · <b>look after</b> cuidar · <b>turn on/off</b> encender/apagar · <b>pick up</b> recoger/contestar · <b>come back</b> regresar · <b>go out</b> salir · <b>figure out</b> descifrar · <b>run out of</b> quedarse sin · <b>hang out</b> pasar el rato · <b>show up</b> aparecer · <b>work out</b> hacer ejercicio / resolverse · <b>take off</b> despegar/quitarse · <b>put on</b> ponerse · <b>call back</b> devolver la llamada.','Con objeto: "Turn <b>it</b> off" (el pronombre va en medio).','La partícula suele llevar el acento: "get ÚP", "find ÁUT".'],
+ ex:[['I get up at six.','ai guet áp at siks.','Me levanto a las seis.'],['Don\'t give up!','dóunt guiv áp!','¡No te rindas!'],['I found out the truth.','ai fáund áut dha truuth.','Me enteré de la verdad.'],['Can you pick me up?','kæn yu pik mi áp?','¿Puedes recogerme?'],['We ran out of milk.','uí ræn áut av milk.','Se nos acabó la leche.'],['Please turn it off.','plíiz tern it óf.','Por favor, apágalo.']],
+ quiz:[['"Rendirse" =',['give up','give in to','get up'],0,'give up.'],['I\'m ___ my keys (buscando).',['looking after','looking for','looking at'],1,'look for = buscar.'],['Turn ___ off.',['off it','it','it off'],2,'El pronombre va en medio: turn it off.']]},
+{id:'cond',lvl:'B2',t:'Condicionales (0, 1, 2, 3)',sum:'Los condicionales usan if. Tipo cero, verdades: if you heat ice, it melts. Tipo uno, futuro real: if it rains, I will stay home. Tipo dos, situaciones imaginarias: if I had money, I would travel. Tipo tres, el pasado que no pasó: if I had studied, I would have passed.',
+ pts:['<b>0</b>: if + presente, presente → "If you heat ice, it melts".','<b>1</b>: if + presente, will + base → "If it <b>rains</b>, I\'<b>ll</b> stay home" (¡no "if it will rain"!).','<b>2</b>: if + pasado, would + base → "If I <b>had</b> money, I <b>would</b> travel". Con be: "If I <b>were</b> you…".','<b>3</b>: if + had + participio, would have + participio → "If I <b>had studied</b>, I <b>would have passed</b>" (hablado: "would\'ve" = uúdav).','unless = a menos que: "I won\'t go unless you come".'],
+ ex:[['If it rains, I\'ll stay home.','if it réinz, ail stéi jóum.','Si llueve, me quedo en casa.'],['If I had more time, I would learn guitar.','if ai jæd mor táim, ai uud lern guitár.','Si tuviera más tiempo, aprendería guitarra.'],['If I were you, I would call her.','if ai uér yu, ai uud kol jer.','Yo que tú, la llamaría.'],['If I had studied, I would have passed.','if ai jæd stádid, ai uúdav pæst.','Si hubiera estudiado, habría pasado.'],['If you heat ice, it melts.','if yu jíit áis, it melts.','Si calientas el hielo, se derrite.']],
+ quiz:[['If it ___ tomorrow, we\'ll cancel.',['will rain','rains','rained'],1,'Condicional 1: if + presente.'],['If I ___ rich, I would buy a house.',['am','were','will be'],1,'Condicional 2: if + pasado (were).'],['If she had called, I ___ answered.',['would','would have','will have'],1,'Condicional 3: would have + participio.']]}
+];
+/* ~80 irregular verbs: base, past, participle, respelling, español */
+const IRREG=[['be','was / were','been','bi · uás / uér · bin','ser / estar'],['have','had','had','jæv · jæd · jæd','tener / haber'],['do','did','done','duu · did · dan','hacer'],['say','said','said','séi · sed · sed','decir'],['go','went','gone','góu · uént · gon','ir'],['get','got','got / gotten','guet · gat · gáten','obtener / llegar'],['make','made','made','méik · méid · méid','hacer / fabricar'],['know','knew','known','nóu · nuu · nóun','saber / conocer'],['think','thought','thought','think · thot · thot','pensar'],['take','took','taken','téik · tuk · téiken','tomar / llevar'],['see','saw','seen','síi · so · síin','ver'],['come','came','come','kam · kéim · kam','venir'],['give','gave','given','guiv · guéiv · guíven','dar'],['find','found','found','fáind · fáund · fáund','encontrar'],['tell','told','told','tel · tóuld · tóuld','decir / contar'],['become','became','become','bikám · bikéim · bikám','convertirse'],['leave','left','left','líiv · left · left','salir / dejar'],['feel','felt','felt','fíil · felt · felt','sentir'],['bring','brought','brought','bring · brot · brot','traer'],['begin','began','begun','biguín · bigæn · bigán','empezar'],['keep','kept','kept','kíip · kept · kept','mantener / guardar'],['hold','held','held','jóuld · jeld · jeld','sostener'],['write','wrote','written','ráit · róut · ríten','escribir'],['stand','stood','stood','stænd · stud · stud','estar de pie'],['hear','heard','heard','jíer · jerd · jerd','oír'],['let','let','let','let · let · let','dejar / permitir'],['mean','meant','meant','míin · ment · ment','significar'],['set','set','set','set · set · set','poner / fijar'],['meet','met','met','míit · met · met','conocer / reunirse'],['run','ran','run','ran · ræn · ran','correr'],['pay','paid','paid','péi · péid · péid','pagar'],['sit','sat','sat','sit · sæt · sæt','sentarse'],['speak','spoke','spoken','spíik · spóuk · spóuken','hablar'],['lie','lay','lain','lái · léi · léin','acostarse'],['lead','led','led','líid · led · led','dirigir'],['read','read','read','ríid · red · red','leer'],['grow','grew','grown','gróu · gruu · gróun','crecer'],['lose','lost','lost','luuz · lost · lost','perder'],['fall','fell','fallen','fol · fel · fólen','caer'],['send','sent','sent','send · sent · sent','enviar'],['build','built','built','bild · bilt · bilt','construir'],['understand','understood','understood','anderstǽnd · anderstúd · anderstúd','entender'],['draw','drew','drawn','dro · druu · dron','dibujar'],['break','broke','broken','bréik · bróuk · bróuken','romper'],['spend','spent','spent','spend · spent · spent','gastar / pasar tiempo'],['cut','cut','cut','kat · kat · kat','cortar'],['rise','rose','risen','ráiz · róuz · rízen','subir / levantarse'],['drive','drove','driven','dráiv · dróuv · dríven','manejar'],['buy','bought','bought','bái · bot · bot','comprar'],['wear','wore','worn','uér · uór · uórn','llevar puesto'],['choose','chose','chosen','chuuz · chóuz · chóuzen','elegir'],['seek','sought','sought','síik · sot · sot','buscar'],['throw','threw','thrown','thróu · thruu · thróun','lanzar'],['catch','caught','caught','kæch · kot · kot','atrapar'],['deal','dealt','dealt','díil · delt · delt','tratar / lidiar'],['win','won','won','uín · uán · uán','ganar'],['forget','forgot','forgotten','forgét · forgát · forgáten','olvidar'],['lay','laid','laid','léi · léid · léid','poner / colocar'],['sell','sold','sold','sel · sóuld · sóuld','vender'],['fight','fought','fought','fáit · fot · fot','pelear'],['eat','ate','eaten','íit · éit · íiten','comer'],['drink','drank','drunk','drink · drænk · drank','beber'],['sleep','slept','slept','slíip · slept · slept','dormir'],['teach','taught','taught','tíich · tot · tot','enseñar'],['sing','sang','sung','sing · sæng · sang','cantar'],['swim','swam','swum','suím · suǽm · suám','nadar'],['fly','flew','flown','flái · fluu · flóun','volar'],['forgive','forgave','forgiven','forguív · forguéiv · forguíven','perdonar'],['hide','hid','hidden','jáid · jid · jíden','esconder'],['shake','shook','shaken','shéik · shuk · shéiken','sacudir'],['steal','stole','stolen','stíil · stóul · stóulen','robar'],['wake','woke','woken','uéik · uóuk · uóuken','despertar'],['ride','rode','ridden','ráid · róud · ríden','montar'],['ring','rang','rung','ring · ræng · rang','sonar (timbre)'],['shoot','shot','shot','shuut · shat · shat','disparar / filmar'],['hit','hit','hit','jit · jit · jit','golpear'],['put','put','put','put · put · put','poner'],['hurt','hurt','hurt','jert · jert · jert','doler / lastimar'],['cost','cost','cost','kost · kost · kost','costar'],['feed','fed','fed','fíid · fed · fed','alimentar'],['blow','blew','blown','blóu · bluu · blóun','soplar'],['freeze','froze','frozen','fríiz · fróuz · fróuzen','congelar'],['bite','bit','bitten','báit · bit · bíten','morder'],['dig','dug','dug','dig · dag · dag','cavar'],['tear','tore','torn','tér · tor · torn','rasgar']];
+
+/* ================= Inglés afroamericano (AAVE) y slang ================= */
+const AAVE_FEAT=[
+ ['Habitual "be" (be habitual)','She be working late.','shi bi uérking léit.','Significa que ella <b>suele / siempre</b> trabaja tarde (acción habitual), no "está trabajando ahora". En inglés estándar: "She usually works late".'],
+ ['Omisión del verbo "to be" (copula deletion)','He tired.','ji táierd.','= "He is tired". Se omite is/are donde el inglés estándar usa contracción (he\'s, they\'re). Sigue reglas: no se omite en "I am" ni al final de frase.'],
+ ['Negación concordante (negative concord)','I don\'t know nothing.','ai dóunt nóu nádhing.','= "I don\'t know anything". Como en español ("no sé nada"), varias negaciones refuerzan el no.'],
+ ['"Done" completivo','I done finished my work.','ai dan fínisht mai uérk.','Marca que algo ya está completamente terminado: "Ya terminé por completo".'],
+ ['"BIN" acentuado (stressed been)','I BIN knew that.','ai BÍN nuu dhat.','Con acento fuerte en BIN = "lo sé desde hace mucho tiempo".'],
+ ['Sin -s en tercera persona','She walk to school.','shi uók tu skuul.','= "She walks to school". La -s de tercera persona es opcional en este dialecto.'],
+ ['"Ain\'t"','I ain\'t going.','ai éint góuing.','= "I\'m not / isn\'t / haven\'t". Muy común en habla informal de muchos grupos en EE. UU.'],
+ ['"Finna" (futuro inmediato)','I\'m finna eat.','aim fína íit.','= "I\'m about to eat" (estoy a punto de). Viene de "fixing to".']];
+/* [expresión, pronunciación, significado, registro, ejemplo, pr ejemplo, español ejemplo] */
+const SLANG=[
+ ['no cap','nou kæp','en serio, sin mentir','Informal, entre amigos.','That was the best taco I\'ve ever had, no cap.','dhat uás dha best táko aiv éver jæd, nóu kæp.','Fue el mejor taco que he comido, en serio.'],
+ ['cap / that\'s cap','kæp / dhats kæp','mentira, exageración','Informal. "Stop capping" = deja de mentir.','You ran ten miles? That\'s cap.','yu ræn ten máilz? dhats kæp.','¿Corriste diez millas? Eso es mentira.'],
+ ['bet','bet','va, de acuerdo, trato hecho','Muy informal; respuesta corta.','— Pizza tonight? — Bet.','— píitsa tunáit? — bet.','— ¿Pizza esta noche? — Va.'],
+ ['finna','fína','a punto de (de "fixing to")','Informal, sur de EE. UU. y AAVE.','I\'m finna head out.','aim fína jed áut.','Ya me voy (estoy a punto de salir).'],
+ ['lowkey','lóu-kíi','un poco, en secreto, sin admitirlo mucho','Informal, muy común.','I\'m lowkey nervous about tomorrow.','aim lóukii nérvas abáut tumárou.','Estoy medio nervioso por lo de mañana.'],
+ ['highkey','jái-kíi','abiertamente, muy claramente','Informal.','I\'m highkey excited for the trip.','aim jáikii iksáirid for dha trip.','Estoy súper emocionado por el viaje.'],
+ ['it\'s giving…','its guíving','da la vibra de…, parece…','Informal, redes sociales; viene de la cultura ballroom negra y LGBTQ.','This outfit? It\'s giving rich.','dhis áutfit? its guíving rich.','¿Este look? Da vibra de rico.'],
+ ['on God / ong','on gad','lo juro, de verdad','Informal; puede sonar irrespetuoso para personas religiosas.','On God, I didn\'t eat your fries.','on gad, ai dídant íit yor fráiz.','Te lo juro, no me comí tus papas.'],
+ ['deadass','dédæs','en serio, de verdad','Informal (origen en Nueva York); contiene "ass", evítalo en contextos formales.','Are you deadass moving to Texas?','ar yu dédæs múuving tu téksas?','¿En serio te mudas a Texas?'],
+ ['for real / fr','for ríil / ef ar','de verdad','Informal, muy común; "fr fr" = de verdad de verdad.','That movie was sad, for real.','dhat múuvi uás sæd, for ríil.','Esa película fue triste, de verdad.'],
+ ['say less','séi les','entendido, no digas más (acepto)','Informal.','— Want to get tacos? — Say less.','— uánt tu guet tákos? — séi les.','— ¿Vamos por tacos? — Dicho y hecho.'],
+ ['slay','sléi','lucirse, hacerlo increíble','Informal; de la cultura ballroom.','You slayed that presentation!','yu sléid dhat presentéishan!','¡Te luciste en esa presentación!'],
+ ['ate / ate that','éit','lo hizo perfecto','Informal, redes.','She ate that performance.','shi éit dhat perfórmans.','Lo hizo perfecto en esa presentación.'],
+ ['bussin\'','básin','delicioso, buenísimo (comida)','Informal.','This birria is bussin\'.','dhis bírria iz básin.','Esta birria está buenísima.'],
+ ['hits different','jits dífrant','se siente distinto (mejor)','Informal.','Coffee hits different in the morning.','kófi jits dífrant in dha mórning.','El café se siente distinto en la mañana.'],
+ ['salty','sólti','picado, resentido, molesto','Informal.','He\'s still salty about losing.','jiz stil sólti abáut lúuzing.','Sigue picado por haber perdido.'],
+ ['throw shade','thróu shéid','tirar indirectas, criticar sutilmente','Informal; de la cultura ballroom.','Was she throwing shade at me?','uás shi thróuing shéid at mi?','¿Me estaba tirando indirectas?'],
+ ['spill the tea','spil dha tíi','contar el chisme','Informal; "tea" = chisme.','Come on, spill the tea!','kam on, spil dha tíi!','¡Ándale, cuenta el chisme!'],
+ ['sus','sas','sospechoso','Informal (de "suspicious").','That deal looks sus.','dhat díil luks sas.','Ese trato se ve sospechoso.'],
+ ['GOAT','góut','el mejor de todos los tiempos','Informal; "Greatest Of All Time".','Messi is the GOAT.','mési iz dha góut.','Messi es el mejor de la historia.'],
+ ['extra','ékstra','exagerado, dramático','Informal.','Don\'t be so extra.','dóunt bi sóu ékstra.','No seas tan exagerado.'],
+ ['ghost','góust','desaparecer, dejar de responder','Informal.','He ghosted me after the date.','ji góustid mi áfter dha déit.','Desapareció después de la cita.'],
+ ['I\'m weak / I\'m dead','aim uíik / aim ded','me muero de risa','Informal.','That video? I\'m weak.','dhat vídiou? aim uíik.','¿Ese video? Me muero de risa.'],
+ ['periodt','píriad','y punto (énfasis)','Informal; de AAVE.','You deserve respect, periodt.','yu disérv rispékt, píriad.','Mereces respeto, y punto.'],
+ ['mid','mid','mediocre, regular','Informal, crítico.','The movie was kind of mid.','dha múuvi uás káinda mid.','La película estuvo medio mediocre.'],
+ ['drip','drip','estilo, ropa con estilo','Informal.','Your drip is clean today.','yor drip iz klíin tudéi.','Tu estilo está impecable hoy.']];
+
+/* ================= GRAMÁTICA view + slang view + material de apoyo ================= */
+const LVLR={A1:1,A2:2,B1:3,B2:4};
+const GRAMO=GRAM.map((u,i)=>[u,i]).sort((a,b)=>(LVLR[a[0].lvl]-LVLR[b[0].lvl])||(a[1]-b[1])).map(x=>x[0]);
+function gramState(){S.gram=S.gram||{done:{},next:0,dailyEx:{}};S.gram.done=S.gram.done||{};S.gram.dailyEx=S.gram.dailyEx||{};return S.gram}
+function gramCurrent(){const g=gramState();return GRAMO[Math.min(g.next||0,GRAMO.length-1)]}
+const gIt=(u,k)=>{const e=u.ex[k%u.ex.length];return{id:'g_'+u.id+'_'+(k%u.ex.length),en:e[0],pr:e[1],es:e[2]}};
+function renderGram(){const g=gramState();const cur=gramCurrent();
+ $('#v-gram').innerHTML=`<h2>📘 Gramática · tu curso principal (A1 → B2)</h2>
+ <div class="card daily-hero"><div class="small mut">Tu unidad actual</div><div class="en">${esc(cur.t)}</div><div class="small mut">${cur.lvl} · la Lección del día avanza por este curso en orden (y mezcla modismos)</div><div class="row"><button class="pri big" onclick="openUnit('${cur.id}')">▶ Abrir unidad</button></div></div>
+ ${['A1','A2','B1','B2'].map(L=>`<h3>Nivel ${L}</h3><div class="grid">${GRAMO.filter(u=>u.lvl===L).map(u=>{const d=g.done[u.id];return `<div class="tile" onclick="openUnit('${u.id}')"><b>${esc(u.t)}</b><div class="small mut">${u.ex.length} ejemplos · quiz ${u.quiz.length}</div><div class="small">${d?`✅ Quiz ${d.score}/${u.quiz.length}`:u===cur?'👉 actual':''}</div></div>`}).join('')}</div>`).join('')}`}
+let GU=null;
+function openUnit(id){const u=GRAM.find(x=>x.id===id);if(!u)return;if(!$('#v-gram').classList.contains('act'))show('gram');CARDS={};GU={stop:true};
+ $('#v-gram').innerHTML=`<button class="sm" onclick="GU&&(GU.stop=true);renderGram()">← Unidades</button><h2>📘 ${esc(u.t)} <span class="small mut">${u.lvl}</span></h2>
+ <div class="card"><div class="row" style="justify-content:space-between;margin:0"><b>🧑‍🏫 Explicación</b><button class="sm" id="guSay">🔊 Que Sam me lo explique</button></div><p>${esc(u.sum)}</p><ul class="small">${u.pts.map(p=>`<li>${p}</li>`).join('')}</ul></div>
+ ${u.id==='irreg'?irregHTML():''}
+ <div class="row"><button class="pri big" id="guRun">▶ Repite conmigo (guiado)</button></div>
+ <h3>🗣️ Ejemplos: escucha y repite</h3><div id="guEx">${u.ex.map((e,k)=>practiceCard(gIt(u,k))).join('')}</div>
+ <h3>🧠 Quiz</h3><div id="guQuiz"></div>`;
+ $('#guSay').onclick=()=>coachSay(esc(u.sum));$('#guRun').onclick=()=>gramGuided(u);gramQuiz(u,0,0);
+ const iq=$('#irq');if(iq)iq.oninput=()=>{const q=iq.value.toLowerCase();$$('#irTab tr[data-v]').forEach(r=>r.classList.toggle('hide',!!q&&!r.dataset.v.includes(q)))}}
+function irregHTML(){return `<div class="card"><h3>📋 Tabla de verbos irregulares (${IRREG.length})</h3><input type="text" id="irq" placeholder="Buscar verbo (inglés o español)…"><div style="overflow:auto"><table id="irTab"><tr><th></th><th>Base</th><th>Pasado</th><th>Participio</th><th>Español</th></tr>${IRREG.map(v=>`<tr data-v="${esc((v[0]+' '+v[1]+' '+v[2]+' '+v[4]).toLowerCase())}"><td><button class="sm" data-say="${esc(v[0]+', '+v[1].replace(' / ',', ')+', '+v[2].replace(' / ',', '))}" data-slow="1">🔊</button></td><td><b>${esc(v[0])}</b></td><td>${esc(v[1])}</td><td>${esc(v[2])}</td><td class="small">${esc(v[4])}<div class="pr">${prHTML(v[3])}</div></td></tr>`).join('')}</table></div></div>`}
+async function gramGuided(u){GU={stop:false};const stop=()=>!GU||GU.stop;
+ await coachSay(esc(u.sum));
+ for(let k=0;k<u.ex.length&&!stop();k++){const it=gIt(u,k);const card=$('#guEx').children[k];card.scrollIntoView({behavior:'smooth',block:'center'});card.classList.add('focus');
+  await coachSay(`Escucha: <b>${esc(it.en)}</b>`,{es:say('listen')});if(stop())break;await speak(it.en);await coachSay(`Significa: <b>${esc(it.es)}</b>.`,{es:'Significa: '+it.es});if(stop())break;
+  await coachSay('Repite después de mí. 🎤',{es:say('repeat')});if(stop())break;await speakSlow(it.en);
+  const v=await attempt(it,card,{noLoop:false,quiet:false});card.classList.remove('focus');if(stop())break;
+  if(!v){await coachSay('No te escuché; puedes repetirla luego con el botón 🎤.')}await sleep(400)}
+ if(!stop()){await coachSay('¡Muy bien! Ahora haz el quiz de abajo para comprobar que lo entendiste.',{mood:'happy'});$('#guQuiz').scrollIntoView({behavior:'smooth'})}}
+function gramQuiz(u,i,ok){const box=$('#guQuiz');if(!box)return;const q=u.quiz[i];
+ if(!q){const g=gramState();const prev=g.done[u.id];g.done[u.id]={score:ok,t:Date.now()};const idx=GRAMO.indexOf(u);if(ok>=Math.ceil(u.quiz.length*0.66)&&idx>=(g.next||0))g.next=idx+1;addXP(5+ok*3);save();
+  box.innerHTML=`<div class="card"><h3>${ok===u.quiz.length?'🏆':'📊'} ${ok}/${u.quiz.length}</h3><p>${ok>=Math.ceil(u.quiz.length*0.66)?'¡Unidad aprobada! La lección del día pasará a la siguiente.':'Repasa la explicación y vuelve a intentarlo.'}</p><div class="row"><button onclick="gramQuiz(GRAM.find(x=>x.id==='${u.id}'),0,0)">🔁 Repetir quiz</button>${GRAMO[GRAMO.indexOf(u)+1]?`<button class="pri" onclick="openUnit('${GRAMO[GRAMO.indexOf(u)+1].id}')">Siguiente unidad →</button>`:''}</div></div>`;
+  coachSay(ok>=Math.ceil(u.quiz.length*0.66)?`¡Aprobaste el quiz con ${ok} de ${u.quiz.length}!`:`Sacaste ${ok} de ${u.quiz.length}. Repasa la explicación y vuelve a intentarlo.`,{mood:ok>=2?'happy':'concern'});return}
+ box.innerHTML=`<div class="card"><div class="small mut">Pregunta ${i+1}/${u.quiz.length}</div><p><b>${esc(q[0])}</b></p>${q[1].map((o,j)=>`<button class="opt" data-j="${j}">${esc(o)}</button>`).join('')}<div id="gqFb"></div></div>`;
+ $$('#guQuiz .opt').forEach(b=>b.onclick=()=>{const right=+b.dataset.j===q[2];$$('#guQuiz .opt').forEach(x=>{x.disabled=true;if(+x.dataset.j===q[2])x.classList.add('right')});if(!right)b.classList.add('wrong');
+  $('#gqFb').innerHTML=`<p>${right?'✅ ¡Correcto!':'❌ No.'} ${esc(q[3])}</p><button class="pri" id="gqN">Siguiente →</button>`;coachSay((right?'¡Correcto! ':'No. ')+esc(q[3]),{mood:right?'happy':'concern'});$('#gqN').onclick=()=>gramQuiz(u,i+1,ok+(right?1:0))})}
+
+/* ---------- Inglés afroamericano y slang ---------- */
+function renderSlang(){CARDS={};
+ $('#v-slang').innerHTML=`<h2>🗽 Inglés afroamericano y slang</h2>
+ <div class="card"><h3>¿Qué es el inglés afroamericano (AAVE)?</h3>
+ <p>El <b>inglés vernáculo afroamericano</b> (AAVE, por sus siglas en inglés) es un <b>dialecto legítimo</b> del inglés, hablado por muchas comunidades afroamericanas en EE. UU. No es "inglés mal hablado": tiene <b>su propia gramática, pronunciación y reglas consistentes</b>, igual que el español del Caribe o el de México tienen las suyas. Los lingüistas lo estudian como un sistema completo (ver la resolución de la Linguistic Society of America).</p>
+ <p>Muchísimas palabras del slang que hoy usa todo EE. UU. (y las redes) <b>nacieron en el AAVE</b> o en la cultura ballroom negra y LGBTQ. Conocerlo te ayuda a <b>entender</b> música, series, redes y a la gente en la calle.</p>
+ <p class="small">👉 Consejo respetuoso: aprende a <b>entenderlo</b> primero. Al hablar, usa el slang de forma natural y con amigos; evita imitar un acento o un dialecto como caricatura, y no uses slang en entrevistas de trabajo o situaciones formales.</p>
+ <p class="small mut">Fuentes: <a href="https://www.linguisticsociety.org/resource/lsa-resolution-oakland-ebonics-issue" target="_blank" rel="noopener">Linguistic Society of America (1997)</a> · <a href="https://axis.org/resource/a-parent-guide-to-teen-slang/" target="_blank" rel="noopener">Axis: guía de slang</a> · <a href="https://www.weareteachers.com/teen-slang/" target="_blank" rel="noopener">WeAreTeachers: teen slang</a></p></div>
+ <h3>📐 Rasgos gramaticales del AAVE (para entenderlos)</h3>${AAVE_FEAT.map(f=>`<div class="card"><b>${esc(f[0])}</b><div class="en">${esc(f[1])} <button class="sm" data-say="${esc(f[1])}">🔊</button></div><div class="pr">🗣️ ${prHTML(f[2])}</div><div class="small">${f[3]}</div></div>`).join('')}
+ <h3>💬 Slang común (con registro y práctica)</h3><input type="text" id="slq" placeholder="Buscar…">
+ <div id="slList">${SLANG.map((s,i)=>`<div class="card sl" data-q="${esc((s[0]+' '+s[2]).toLowerCase())}"><div class="row" style="justify-content:space-between;margin:0"><div><span class="en">${esc(s[0])}</span> <span class="pr">${prHTML(s[1])}</span><div>= ${esc(s[2])}</div><div class="small mut">📍 ${esc(s[3])}</div></div><button class="sm" onclick="this.closest('.card').querySelector('.more').classList.toggle('hide')">Practicar ▾</button></div><div class="more hide">${practiceCard({id:'sl_'+i,en:s[4],pr:s[5],es:s[6]})}</div></div>`).join('')}</div>
+ <p class="small mut">Este módulo no tiene insultos ni palabras ofensivas. El slang cambia rápido; algunos términos pueden sonar viejos en unos años.</p>`;
+ const q=$('#slq');q.oninput=()=>{const v=q.value.toLowerCase();$$('#slList .sl').forEach(c=>c.classList.toggle('hide',!!v&&!c.dataset.q.includes(v)))}}
+
+/* ---------- Material de apoyo (links / notes) ---------- */
+function materialHTML(){const M=S.material||[];
+ return `<div class="card" id="matCard"><h3>📎 Material de apoyo</h3><p class="small">Pega links de YouTube, podcasts, artículos o notas que quieras tener a mano para estudiar.</p>
+ <input type="text" id="matTitle" placeholder="Título (opcional), ej: Pronunciación de la TH"><textarea id="matUrl" rows="2" placeholder="Pega aquí el link (https://youtube.com/…) o escribe una nota"></textarea><div class="row"><button class="pri" id="matAdd">➕ Agregar</button></div>
+ <ul class="matlist">${M.length?M.map((m,i)=>`<li>${m.url?`${/youtu\.?be/.test(m.url)?'▶️':'🔗'} <a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.title||m.url)}</a>${m.title?`<div class="small mut">${esc(m.url)}</div>`:''}`:`📝 <b>${esc(m.title||'Nota')}</b><div class="small">${esc(m.note)}</div>`} <button class="sm" data-matdel="${i}" aria-label="Borrar">✕</button></li>`).join(''):'<li class="small mut">Aún no hay material.</li>'}</ul></div>`}
+function bindMaterial(){const add=$('#matAdd');if(!add)return;add.onclick=()=>{const raw=$('#matUrl').value.trim(),title=$('#matTitle').value.trim();if(!raw)return;
+  const urls=raw.match(/https?:\/\/[^\s<>"']+/g);S.material=S.material||[];if(urls)urls.forEach(u=>S.material.push({t:Date.now(),title:urls.length===1?title:'',url:u}));else S.material.push({t:Date.now(),title,note:raw});save();$('#matCard').outerHTML=materialHTML();bindMaterial()};
+ $$('[data-matdel]').forEach(b=>b.onclick=()=>{S.material.splice(+b.dataset.matdel,1);save();$('#matCard').outerHTML=materialHTML();bindMaterial()})}
+
+/* ---------- Real-time word correction inside the AI conversation ---------- */
+function tuDrillTargets(pa,cor,j){const T=S.settings.threshold||80;
+ const bad=pa&&pa.words?pa.words.filter(w=>w.err!=='Insertion'&&w.w&&w.w.replace(/[^a-z]/gi,'').length>1&&((w.acc!=null&&w.acc<T)||w.err==='Omission')).sort((a,b)=>(a.acc||0)-(b.acc||0)).slice(0,3):[];
+ const mis=(cor||[]).filter(c=>c&&c.corrected&&c.corrected.split(/\s+/).length<=10).slice(0,2);return{bad,mis}}
+async function tuDrill(pa,cor,j){if(S.settings.tuDrill===false||!AZ.cfg()||!MIC.supported())return null;
+ const {bad,mis}=tuDrillTargets(pa,cor,j);if(!bad.length&&!mis.length)return null;
+ const T=S.settings.threshold||80,maxW=S.settings.maxWord||5,maxP=S.settings.maxPhrase||3,auto=S.settings.autoListen;
+ const log=$('#tuLog');log.insertAdjacentHTML('beforeend','<div class="msg sam drill"><div class="small"><b>🛠️ Corrección en tiempo real</b></div><div class="dbox"></div></div>');const box=log.lastElementChild.querySelector('.dbox');
+ LOOP={};TU.drilling=true;const res=[];const stop=()=>!LOOP||LOOP.stop||!TU||TU.stopSpeak;
+ const micBtn=l=>`<div class="row"><button class="mic big pri" data-loop="go">🎤 ${l}</button></div>`;
+ const names=bad.map(w=>w.w);
+ await coachSay(`Antes de seguir, corrijamos ${names.length?`la pronunciación de <b>${names.map(esc).join(', ')}</b>`:''}${names.length&&mis.length?' y ':''}${mis.length?`${mis.length===1?'una palabra o frase mal usada':'unas palabras mal usadas'}`:''}.`,{es:`Antes de seguir, vamos a corregir ${names.length?(names.length===1?'una palabra que no sonó bien':'unas palabras que no sonaron bien'):''}${names.length&&mis.length?', y ':''}${mis.length?(mis.length===1?'una palabra mal usada':'unas palabras mal usadas'):''}.`});
+ for(const w0 of bad){if(stop())break;LOOP.skip=false;let w=w0,tries=0,ok=false;const tip=(j.pron_tips||[]).find(p=>p&&p.word&&p.word.toLowerCase()===w0.w.toLowerCase());
+  while(!stop()&&!LOOP.skip&&tries<maxW){
+   loopUI(box,`<div class="small mut">Pronunciación (${tries+1}/${maxW}) · meta ${T}</div>${wordDetail(w)}${tip&&tip.tip_es?`<div class="small">👄 ${esc(tip.tip_es)}</div>`:''}${micBtn('Decir "'+esc(w0.w)+'"')}`);
+   if(tries===0){const d0=(w0.phon||[]).map(phDiag).sort((a,b)=>a.acc-b.acc)[0];await speak(w0.err==='Omission'?`La palabra "${w0.w}" casi no se escuchó.`:(d0?friendlyTip(w0,d0):`Cuida la palabra "${w0.w}".`),{lang:'es'});if(tip&&tip.tip_es&&!stop()&&!LOOP.skip)await speak(tip.tip_es,{lang:'es'})}
+   if(stop()||LOOP.skip)break;await modelWord(w,false);if(stop()||LOOP.skip)break;await speak(say('you'),{lang:'es'});if(stop()||LOOP.skip)break;
+   await waitGo(auto);if(stop()||LOOP.skip)break;
+   box.querySelector('.loopcard').insertAdjacentHTML('beforeend','<div class="small mut">🎧 Escuchando…</div>');
+   let wr;try{wr=await AZ.assess(w0.w,{maxMs:6000})}catch(e){micFail(e);LOOP.stop=true;break}
+   tries++;if(wr.error){await coachSay(azErr(wr),{mood:'concern'});continue}
+   const ww=wr.words.find(x=>x.err!=='Insertion')||wr.words[0];if(!ww||ww.acc==null){await coachSay('No te escuché. Otra vez.');continue}
+   phStat([ww]);sessAdd({en:w0.w,es:'Palabra corregida en conversación'},ww.acc);w=ww;
+   if(ww.acc>=T){ok=true;addXP(3);mood('happy');loopUI(box,`<div class="big" style="color:var(--ok)">✅ ${esc(w0.w)}: ${ww.acc}</div>${ww.phon&&ww.phon.length?phChips(ww):""}`);await speak(say('good'),{lang:'es'})}
+   else{const d=(ww.phon||[]).map(phDiag).sort((a,b)=>a.acc-b.acc)[0];await coachSay(`<b>${esc(w0.w)}: ${ww.acc}/100.</b> ${d&&d.heard?`Sonó como /${esc(d.heard)}/ en vez de /${esc(d.exp)}/.`:'Casi.'} Otra vez.`,{es:`${ww.acc} de 100. `+(d?friendlyTip(ww,d):say('almost')),mood:'concern'})}
+   if(ok)break}
+  res.push([w0.w,w.acc,ok]);if(!ok)srsAdd({id:'w_'+w0.w.toLowerCase(),en:w0.w,pr:phRespell(w0.phon||[]),es:'Palabra difícil (pronunciación)',ipa:'/'+(w0.phon||[]).map(x=>x.p).join('')+'/'},true)}
+ for(const c of mis){if(stop())break;LOOP.skip=false;let tries=0,ok=false,last=null;const it={id:'c_'+hash(c.corrected),en:c.corrected,pr:c.corrected_pr||'',es:c.explanation_es||''};
+  loopUI(box,`<div class="small mut">Palabra mal usada</div><div class="cor"><s>${esc(c.original)}</s> → <b>${esc(c.corrected)}</b></div><div class="pr">🗣️ ${prHTML(c.corrected_pr||'')}</div><div class="small">${esc(c.explanation_es||'')}</div>${micBtn('Decir la frase correcta')}`);
+  await speak(`Dijiste "${c.original}".`,{lang:'es'});if(stop()||LOOP.skip)continue;if(c.explanation_es)await speak(c.explanation_es,{lang:'es'});if(stop()||LOOP.skip)continue;
+  while(!stop()&&!LOOP.skip&&tries<maxP){await speak(tries?say('again'):pick(['Lo correcto es así.','Mejor se dice así.','Se dice así.'])+' '+say('listen'),{lang:'es'});if(stop()||LOOP.skip)break;await speakSlow(c.corrected);if(stop()||LOOP.skip)break;await speak(c.corrected);if(stop()||LOOP.skip)break;
+   await waitGo(auto);if(stop()||LOOP.skip)break;box.querySelector('.loopcard').insertAdjacentHTML('beforeend','<div class="small mut">🎧 Escuchando…</div>');
+   let r;try{r=await AZ.assess(c.corrected,{maxMs:9000})}catch(e){micFail(e);LOOP.stop=true;break}
+   tries++;if(r.error||!r.words.length){await coachSay(azErr(r),{mood:'concern'});continue}
+   last=r;recordPA(it,r,{noAutoSrs:true,quiet:true});
+   loopUI(box,`<div class="cor"><s>${esc(c.original)}</s> → <b>${esc(c.corrected)}</b></div>${renderPA(r,{ref:c.corrected,expandWeak:1})}${micBtn('Otra vez')}`);
+   if(paGood(r,T)){ok=true;addXP(5);mood('happy');await speak(`${say('good')} ${r.pa.acc} de 100.`,{lang:'es'});break}
+   const wk=r.words.filter(x=>x.err!=='Insertion'&&x.acc!=null).sort((a,b)=>a.acc-b.acc)[0];await speak(`${say('almost')} Sacaste ${r.pa.acc} de 100.`+(wk&&wk.acc<T?` Cuida la palabra "${wk.w}".`:''),{lang:'es'})}
+  res.push([c.corrected,last?last.pa.acc:null,ok])}
+ const skipped=!LOOP||LOOP.stop;LOOP=null;if(TU)TU.drilling=false;
+ box.innerHTML=`<div class="small">${res.map(([w,s,ok])=>`${ok?'✅':'🔁'} ${esc(w)}${s!=null?' '+s:''}`).join(' · ')||'Corrección saltada.'}${res.some(x=>!x[2])?'<div class="small mut">Lo que no salió quedó en tu Repaso.</div>':''}</div>`;
+ if(!skipped&&TU&&!TU.stopSpeak)await speak(say('cont'),{lang:'es'});
+ return{mis:mis.length>0,res}}
 
 /* ================= LECCIÓN DEL DÍA (guided) + RESUMEN DE SESIÓN ================= */
 const PH2SOUND={'θ':'th','ð':'th','v':'v','z':'z','ʃ':'sh','tʃ':'sh','dʒ':'dy','h':'h','ɹ':'r','r':'r','ɝ':'r','ɚ':'r','ə':'schwa','i':'i','ɪ':'i','æ':'ae','ʊ':'u','u':'u','w':'w','s':'s'};
@@ -1228,60 +1619,72 @@ function dailyWeakKeys(){const k=[];weakPhonemes(4).slice(0,3).forEach(x=>{const
 function dailyPick(){const d=dailyLog();const used=new Set(d.used);let c=DATA.idioms.filter(i=>!used.has(i.id));if(!c.length){d.used=[];c=DATA.idioms.slice()}
  const wk=dailyWeakKeys();const sc=i=>{const W=norm(i.en);let s=Math.random()*1.5;W.forEach(w=>soundsOf(w).forEach(k=>{if(wk.includes(k))s+=2}));if(W.length<2||W.length>7)s-=2;return s};
  return c.map(i=>[sc(i),i]).sort((a,b)=>b[0]-a[0])[0][1]}
-function dailyItem(){const t=dailyToday();if(t&&!t.done){const i=DATA.idioms.find(x=>x.id===t.id);if(i)return i}const i=dailyPick();dailyLog().log[todayKey()]={id:i.id,done:false};save();return i}
-function renderDaily(){const t=dailyToday();const it=t?DATA.idioms.find(x=>x.id===t.id):null;
- $('#v-daily').innerHTML=`<h2>📅 Lección del día</h2><div class="card"><p>Cada día Sam te enseña <b>una frase real en inglés</b>: qué significa, cómo se pronuncia, la repites hasta que suene bien y luego la usas en una mini conversación.</p>
+function itemOf(t){if(!t)return null;return t.item||DATA.idioms.find(x=>x.id===t.id)||null}
+/* curriculum order: grammar unit examples, with an idiom every 3rd lesson */
+function dailyNext(){const d=dailyLog();const n=d.n||0;if(n%3===2)return dailyPick();
+ const g=gramState();const u=gramCurrent();const k=g.dailyEx[u.id]||0;const a=gIt(u,k),b=gIt(u,k+1);return Object.assign(a,{gram:u.id,ex:b})}
+function dailyItem(){const t=dailyToday();if(t&&!t.done){const i=itemOf(t);if(i)return i}const i=dailyNext();dailyLog().log[todayKey()]={id:i.id,item:i.gram?i:undefined,done:false};save();return i}
+function renderDaily(){const t=dailyToday();const it=itemOf(t);
+ $('#v-daily').innerHTML=`<h2>📅 Lección del día</h2><div class="card"><p>Cada día Sam avanza contigo por el <b>curso de gramática</b> (A1 → B2) y, cada tercer día, un <b>modismo real</b>: qué significa, cómo se pronuncia, la repites hasta que suene bien y luego la usas en una mini conversación.</p><p class="small mut">Unidad actual: <b>${esc(gramCurrent().t)}</b></p>
  ${t&&t.done?`<p>✅ Ya hiciste la lección de hoy: <b>${esc(it?it.en:'')}</b> (${it?esc(it.es):''}).</p><div class="row"><button class="pri big" onclick="runDaily(true)">➕ Otra frase extra</button><button onclick="runDaily(false,true)">🔁 Repetir la de hoy</button></div>`:`<div class="row"><button class="pri big" onclick="runDaily()">▶ Empezar la lección</button></div>`}</div>
  ${Object.keys(SESSION.items).length?`<button onclick="endSession('#v-daily')">🏁 Terminar sesión y ver resumen</button>`:''}`}
 const dStop=()=>!DAILY||DAILY.stop;
 async function dSay(html,o={}){if(dStop())return;await coachSay(html,o)}
 function dTap(label){return new Promise(r=>{if(dStop())return r(false);const box=$('#dlNext');if(!box)return r(false);box.innerHTML=`<button class="pri big" id="dlGo">${label}</button>`;$('#dlGo').onclick=()=>{box.innerHTML='';r(true)};DAILY.cancelTap=()=>r(false)})}
-async function runDaily(extra,same){let it;if(extra){it=dailyPick();dailyLog().log[todayKey()+'+'+Date.now()]={id:it.id,done:false,extra:1}}else if(same){const t=dailyToday();it=DATA.idioms.find(x=>x.id===t.id)}else it=dailyItem();
+const DSAYS={
+ start:['¡Hola, Yonathan! Vamos con la lección de hoy.','¡Qué gusto verte! Empecemos.','¿Listo? Hoy aprendemos algo nuevo.','¡Va! Empecemos con la lección de hoy.'],
+ phrase:['La frase de hoy es:','Hoy vamos a practicar esta frase:','Esta es tu frase de hoy:'],
+ slow:['Te la digo despacito.','Primero despacio, escucha.','Escúchala lento.'],
+ normal:['Y ahora como la diría alguien de allá, a velocidad normal.','Ahora a velocidad normal.','Ahora normal, como en la calle.'],
+ read:['Fíjate en el subtítulo amarillo: léelo como si fuera español. La parte con tilde va con más fuerza.','Una ayudita: el subtítulo amarillo se lee como español, y donde ves la tilde, le pones más fuerza.'],
+ conv:['¡Muy bien! Ahora vamos a usarla en una mini conversación. Yo digo una frase y tú la repites.','¡Eso! Ahora la usamos en una platiquita. Yo digo algo y tú lo repites.']};
+async function runDaily(extra,same){let it;if(extra){it=dailyNext();dailyLog().log[todayKey()+'+'+Date.now()]={id:it.id,item:it.gram?it:undefined,done:false,extra:1}}else if(same){it=itemOf(dailyToday())||dailyItem()}else it=dailyItem();
+ const U=it.gram?GRAM.find(x=>x.id===it.gram):null;
  if(DAILY){DAILY.stop=true;DAILY.cancelTap&&DAILY.cancelTap()}DAILY=null;show('daily');DAILY={stop:false,it,active:true,handoff:false};CARDS={};
  $('#v-daily').innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin:0">📅 Lección del día</h2><button class="sm" id="dlEnd">🏁 Terminar sesión</button></div>
- <div class="card daily-hero"><div class="small mut">Frase de hoy</div><div class="en big2">${esc(it.en)}</div><div class="pr">🗣️ ${prHTML(it.pr)}</div><div class="es">= ${esc(it.es)}</div>${it.ipa?`<div class="ipa">${esc(it.ipa)}</div>`:''}
+ ${U?`<div class="card"><div class="small mut">📘 Gramática de hoy · ${U.lvl}</div><b>${esc(U.t)}</b><p class="small">${esc(U.sum)}</p><button class="sm" onclick="DAILY&&(DAILY.active=false,DAILY.stop=true);openUnit('${U.id}')">Ver la unidad completa y el quiz →</button></div>`:''}
+ <div class="card daily-hero"><div class="small mut">${U?'Frase de hoy (ejemplo de la unidad)':'Modismo de hoy'}</div><div class="en big2">${esc(it.en)}</div><div class="pr">🗣️ ${prHTML(it.pr)}</div><div class="es">= ${esc(it.es)}</div>${it.ipa?`<div class="ipa">${esc(it.ipa)}</div>`:''}
  <div class="row"><button class="sm" data-say="${esc(it.en)}" data-slow="1">🐢 Lento</button><button class="sm" data-say="${esc(it.en)}">🔊 Normal</button></div></div>
  <div id="dlTips"></div><div id="dlPrac"></div><div id="dlConv"></div><div id="dlNext" class="row"></div>`;
  $('#dlEnd').onclick=()=>{DAILY&&(DAILY.stop=true);DAILY&&DAILY.cancelTap&&DAILY.cancelTap();AZ.stop();stopAudio();if(LOOP)LOOP.stop=true;const d=DAILY;DAILY=null;endSession('#v-daily')};
- const exEs=aiCfg()?aiChat([{role:'system',content:'Translate the English sentence into natural Latin American Spanish. Reply only JSON {"es":"..."}'},{role:'user',content:it.ex.en}],{maxTokens:200}).then(j=>j.es||'').catch(()=>''):Promise.resolve('');
- await dSay('¡Empecemos con esto hoy! 💪',{es:'¡Empecemos con esto hoy!',mood:'happy'});
- await dSay(`La frase de hoy es: <b>${esc(it.en)}</b>`,{es:'La frase de hoy es:'});if(dStop())return;await speak(it.en);
- await dSay(`Significa: <b>${esc(it.es)}</b>.`);
- /* pronunciation teaching */
- await dSay('Escúchala despacio.');if(dStop())return;await speakSlow(it.en);
- await dSay('Ahora a velocidad normal.');if(dStop())return;await speak(it.en);
+ const exEs=it.ex.es?Promise.resolve(it.ex.es):aiCfg()?aiChat([{role:'system',content:'Translate the English sentence into natural Latin American Spanish. Reply only JSON {"es":"..."}'},{role:'user',content:it.ex.en}],{maxTokens:200}).then(j=>j.es||'').catch(()=>''):Promise.resolve('');
+ await dSay('¡Empecemos con esto hoy! 💪',{es:pick(DSAYS.start),mood:'happy'});
+ if(U){if(dStop())return;await dSay(`📘 Hoy toca gramática: <b>${esc(U.t)}</b>`,{es:'Hoy toca un poquito de gramática. '+U.sum});}
+ if(dStop())return;await dSay(`La frase de hoy es: <b>${esc(it.en)}</b>`,{es:pick(DSAYS.phrase)});if(dStop())return;await speak(it.en);
+ await dSay(`Significa: <b>${esc(it.es)}</b>.`,{es:`Quiere decir: ${it.es}`});
+ await dSay('Escúchala despacio.',{es:pick(DSAYS.slow)});if(dStop())return;await speakSlow(it.en);
+ await dSay('Ahora a velocidad normal.',{es:pick(DSAYS.normal)});if(dStop())return;await speak(it.en);
  const wk=dailyWeakKeys();const keys=[...new Set(norm(it.en).flatMap(soundsOf))].sort((a,b)=>(wk.includes(b)?1:0)-(wk.includes(a)?1:0)).slice(0,2);
  $('#dlTips').innerHTML=`<div class="card"><h3>👄 Cómo pronunciarla</h3><p class="small">Lee el subtítulo amarillo como si fuera español: <span class="pr">${prHTML(it.pr)}</span>. La sílaba con tilde se dice más fuerte.</p>${keys.map(k=>`<div class="tip">🔧 <b>${esc(SOUNDS[k].n)}:</b> ${esc(SOUNDS[k].tip)}</div>`).join('')}</div>`;
- await dSay('Lee el subtítulo amarillo como si fuera español. La sílaba con tilde se dice más fuerte.');
- for(const k of keys){if(dStop())return;await dSay(`🔧 <b>${esc(SOUNDS[k].n)}</b>: ${esc(SOUNDS[k].tip)}`,{es:'Ojo con este sonido. '+SOUNDS[k].tip.replace(/"[^"]*"/g,m=>m)})}
- /* repeat until it sounds good */
- await dSay('Ahora repite después de mí. 🎤',{es:'Ahora repite después de mí.'});if(dStop())return;await speak(it.en);
+ await dSay('Lee el subtítulo amarillo como si fuera español. La sílaba con tilde se dice más fuerte.',{es:pick(DSAYS.read)});
+ for(const k of keys){if(dStop())return;await dSay(`🔧 <b>${esc(SOUNDS[k].n)}</b>: ${esc(SOUNDS[k].tip)}`,{es:pick(['Ojo con esto.','Un detallito.','Fíjate en esto.'])+' '+(SOUNDS_SAY[k]||SOUNDS[k].tip)})}
+ await dSay('Ahora repite después de mí. 🎤',{es:say('repeat')});if(dStop())return;await speak(it.en);
  const ok=await dPractice(it,'#dlPrac',{loop:true});if(dStop())return;
- const lg=dailyLog();for(const [k,v] of Object.entries(lg.log))if(v.id===it.id&&!v.done&&(k===todayKey()||v.extra)){v.done=true;v.score=ok}if(!lg.used.includes(it.id))lg.used.push(it.id);addXP(15);save();
- /* mini conversation: repeat-after-me line */
- await dSay('¡Muy bien! 🎉 Ahora practiquemos en una mini conversación. Yo digo una frase en inglés y tú la repites.',{es:'¡Muy bien! Ahora practiquemos en una mini conversación. Yo digo una frase en inglés y tú la repites.',mood:'happy'});
+ const lg=dailyLog();for(const [k,v] of Object.entries(lg.log))if(v.id===it.id&&!v.done&&(k===todayKey()||v.extra)){v.done=true;v.score=ok}if(!lg.used.includes(it.id)&&!it.gram)lg.used.push(it.id);lg.n=(lg.n||0)+1;
+ if(U){const g=gramState();g.dailyEx[U.id]=(g.dailyEx[U.id]||0)+1;const idx=GRAMO.indexOf(U);if(g.dailyEx[U.id]>=2&&idx>=(g.next||0))g.next=idx+1}
+ addXP(15);save();
+ await dSay('¡Muy bien! 🎉 Ahora practiquemos en una mini conversación. Yo digo una frase en inglés y tú la repites.',{es:pick(DSAYS.conv),mood:'happy'});
  const es2=await exEs;const ex={id:it.ex.id,en:it.ex.en,pr:it.ex.pr,es:es2||`Usa «${it.en}» = ${it.es}`,ipa:it.ex.ipa};
  if(!(await dTap('➡️ Seguir')))return;
- await dSay(`Escucha: <b>${esc(ex.en)}</b>`,{es:'Escucha:'});if(dStop())return;await speak(ex.en);
- await dSay(es2?`Quiere decir: <b>${esc(es2)}</b>`:`Aquí usamos «${esc(it.en)}», que significa ${esc(it.es)}.`);
- await dSay('Repite después de mí.');if(dStop())return;await speakSlow(ex.en);
+ await dSay(`Escucha: <b>${esc(ex.en)}</b>`,{es:say('listen')});if(dStop())return;await speak(ex.en);
+ await dSay(es2?`Quiere decir: <b>${esc(es2)}</b>`:`Aquí usamos «${esc(it.en)}», que significa ${esc(it.es)}.`,{es:es2?`Quiere decir: ${es2}.`:`Aquí usamos la frase de hoy, que significa ${it.es}.`});
+ await dSay('Repite después de mí.',{es:say('repeat')});if(dStop())return;await speakSlow(ex.en);
  await dPractice(ex,'#dlConv',{loop:false});if(dStop())return;
- /* question + answer: AI tutor if configured, else built-in */
- if(aiCfg()){await dSay('Ahora te hago una pregunta usando la frase. Contéstame en inglés; si no sabes, contéstame en español y te ayudo.');if(!(await dTap('💬 Empezar la conversación')))return;
-  DAILY.handoff=true;DAILY.active=false;tuNew('daily',`${it.en} (= ${it.es})`);show('tutor');tuRender();
-  tuSend(`(Daily lesson. Phrase: "${it.en}" = "${it.es}". He already practiced it and the example "${it.ex.en}". Start by congratulating him briefly in Spanish, then ask him ONE very simple question that he can answer using the phrase, explain the question in Spanish, and give a model answer in "practice".)`,{opening:true});return}
+ if(aiCfg()){await dSay('Ahora te hago una pregunta usando la frase. Contéstame en inglés; si no sabes, contéstame en español y te ayudo.',{es:pick(['Ahora te hago una pregunta. Contéstame en inglés, y si no sabes, en español, y yo te ayudo.','Vamos a platicar un poquito. Te pregunto algo y me contestas en inglés; si te trabas, dímelo en español.'])});if(!(await dTap('💬 Empezar la conversación')))return;
+  DAILY.handoff=true;DAILY.active=false;tuNew('daily',`${it.en} (= ${it.es})${U?' · '+U.t:''}`);show('tutor');tuRender();
+  tuSend(`(Daily lesson. ${U?`Grammar point of the day: "${U.t}" (${U.sum}). `:''}Phrase: "${it.en}" = "${it.es}". He already practiced it and the example "${it.ex.en}". Start by congratulating him briefly in Spanish, then ask him ONE very simple question that he can answer using the phrase${U?' and the grammar point':''}, explain the question in Spanish, and give a model answer in "practice".)`,{opening:true});return}
  await dConvLocal()}
 /* one guided practice attempt (Azure loop if needed); resolves with best score */
 async function dPractice(it,sel,{loop}){const host=$(sel);host.insertAdjacentHTML('beforeend',practiceCard(it,{noLoop:true,noSrs:true,kind:'line'}));const card=host.lastElementChild;card.scrollIntoView({behavior:'smooth',block:'center'});
  const T=S.settings.threshold||80;let best=0;
  for(let n=0;n<4&&!dStop();n++){const v=await attempt(it,card,{noLoop:true});
-  if(!v){await dSay('No te escuché bien. Toca el botón y dilo otra vez.');if(!(await dTap('🎤 Intentar otra vez')))return best;continue}
+  if(!v){await dSay('No te escuché bien. Toca el botón y dilo otra vez.',{es:say('noHear')});if(!(await dTap('🎤 Intentar otra vez')))return best;continue}
   best=Math.max(best,v.score);
   if(v.az){const r={pa:v.pa,words:v.words,text:v.heardText};if(paGood(r,T))return best;
-   if(loop){await dSay('Vamos a pulirla juntos, palabra por palabra.');if(dStop())return best;const box=card.querySelector('.loop');if(box){let done;const pr=new Promise(x=>done=x);coachLoop(it,box,r,{onLoopDone:rr=>done(rr)});const rr=await pr;best=Math.max(best,rr.pa.pron!=null?rr.pa.pron:(rr.pa.acc||0));}return best}
+   if(loop){await dSay('Vamos a pulirla juntos, palabra por palabra.',{es:pick(['Vamos a pulirla juntos, palabra por palabra.','Va, la mejoramos juntos, poquito a poquito.'])});if(dStop())return best;const box=card.querySelector('.loop');if(box){let done;const pr=new Promise(x=>done=x);coachLoop(it,box,r,{onLoopDone:rr=>done(rr)});const rr=await pr;best=Math.max(best,rr.pa.pron!=null?rr.pa.pron:(rr.pa.acc||0));}return best}
    return best}
   if(v.score>=T||v.self)return best;
-  await dSay('Casi. Escúchala otra vez y repite.');if(dStop())return best;await speakSlow(it.en);if(!(await dTap('🎤 Intentar otra vez')))return best}
+  await dSay('Casi. Escúchala otra vez y repite.',{es:say('almost')+' '+say('again')});if(dStop())return best;await speakSlow(it.en);if(!(await dTap('🎤 Intentar otra vez')))return best}
  return best}
 async function dConvLocal(){const q=pick(DATA.questions);await dSay(`Ahora te hago una pregunta en inglés: <b>${esc(q.en)}</b><div class="pr">${prHTML(q.pr)}</div><div class="es">${esc(q.es)}</div>`,{es:'Ahora te hago una pregunta en inglés. Significa: '+q.es});if(dStop())return;await speak(q.en);
  await dSay('Contéstame en inglés, con frases cortas. Toca el botón para hablar y otra vez para terminar.');
@@ -1302,12 +1705,12 @@ async function endSession(sel){const items=Object.values(SESSION.items);const tu
  const data={minutes:min,xp,phrases:items.map(x=>({en:x.en,es:x.es,best:x.best})),avg,weakPhonemes:sph.map(x=>({ph:x.k,ex:PH[x.k].ex,avg:x.avg})),corrections:cors.map(c=>({original:c.original,corrected:c.corrected,why:c.explanation_es}))};
  const host=sel?$(sel):null;const ph=`<div class="card recap" id="recapBox"><h3>📝 Preparando tu resumen…</h3></div>`;if(host){host.insertAdjacentHTML('beforeend',ph);host.lastElementChild.scrollIntoView({behavior:'smooth'})}else{$('#pmBody').innerHTML=ph;$('#pmodal').classList.add('show')}
  let rc=null;if(aiCfg()){try{const ac=new AbortController();const to=setTimeout(()=>ac.abort(),20000);
-  rc=await aiChat([{role:'system',content:'You are Sam, a warm, honest English coach for Yonathan, a Spanish speaker. Write a SHORT end-of-session recap in simple Mexican Spanish from the JSON data (do not invent things that are not in the data). Reply only JSON {"resumen":"2-3 spoken sentences: how it went, honest and motivating","aprendido":["phrases/grammar points/words learned today, each with the English in quotes and its meaning"],"puntajes":"one sentence with the scores","mejorar":["weak phonemes or recurring errors, with a short tip"],"tareas":["1-2 concrete tasks for tomorrow"]}'},{role:'user',content:JSON.stringify(data)}],{maxTokens:700,signal:ac.signal});clearTimeout(to)}catch(e){rc=null}}
+  rc=await aiChat([{role:'system',content:'You are Sam, a warm, honest English coach for Yonathan, a Spanish speaker. Write a SHORT end-of-session recap in warm, natural, conversational Mexican Spanish from the JSON data (do not invent things that are not in the data). It will be READ ALOUD by a voice: no symbols, no IPA, no slashes, no emojis, no markdown, no abbreviations; describe sounds in everyday words (e.g. "la th de think: lengua entre los dientes"), not phonetic symbols. Sound like a friendly human tutor, with varied encouraging phrases. Reply only JSON {"resumen":"2-3 spoken sentences: how it went, honest and motivating","aprendido":["phrases/grammar points/words learned today, each with the English in quotes and its meaning"],"puntajes":"one sentence with the scores","mejorar":["weak phonemes or recurring errors, with a short tip"],"tareas":["1-2 concrete tasks for tomorrow"]}'},{role:'user',content:JSON.stringify(data)}],{maxTokens:700,signal:ac.signal});clearTimeout(to)}catch(e){rc=null}}
  if(!rc||!rc.resumen){rc={resumen:`Hoy practicaste ${min} minuto${min>1?'s':''} y ganaste ${xp} puntos de experiencia. ${avg!=null?(avg>=85?'Tu pronunciación estuvo muy bien.':avg>=70?'Vas por buen camino con la pronunciación.':'La pronunciación todavía cuesta, pero cada intento cuenta.'):''} ¡Buen trabajo!`,
   aprendido:[...items.slice(0,6).map(x=>`"${x.en}"${x.es?' = '+x.es:''}`),...cors.slice(0,3).map(c=>`"${c.corrected}" (en vez de "${c.original}")`)],
   puntajes:avg!=null?`Promedio de pronunciación: ${avg}/100 en ${items.length} frase${items.length>1?'s':''}.`:'',
-  mejorar:[...sph.map(x=>`El sonido /${x.k}/ (como en ${PH[x.k].ex.split(',')[0]}): ${x.avg}/100. ${PH[x.k].how}`),...weakItems.map(x=>`Repetir "${x.en}" (mejor: ${x.best}).`),...cors.slice(0,2).map(c=>`Ojo: ${c.explanation_es||c.corrected}`)].slice(0,4),
-  tareas:[sph[0]?`Practica 5 minutos el sonido /${sph[0].k}/ en 🎯 Pronunciar.`:'Haz tu repaso espaciado (🔁 Repaso).',weakItems[0]?`Repite "${weakItems[0].en}" hasta pasar de ${S.settings.threshold||80}.`:'Haz la lección del día y conversa 5 turnos con Sam.']}}
+  mejorar:[...sph.map(x=>{const f=phSay(x.k);return `El sonido de "${f?f[0]:PH[x.k].ex.split(',')[0]}" (${x.avg} de 100): ${f?f[1]:PH[x.k].how}.`}),...weakItems.map(x=>`Repetir "${x.en}" (mejor: ${x.best}).`),...cors.slice(0,2).map(c=>`Ojo: ${c.explanation_es||c.corrected}`)].slice(0,4),
+  tareas:[sph[0]?`Practica 5 minutos el sonido de "${(phSay(sph[0].k)||[PH[sph[0].k].ex.split(',')[0]])[0]}" en Pronunciar.`:'Haz tu repaso del día.',weakItems[0]?`Repite "${weakItems[0].en}" hasta pasar de ${S.settings.threshold||80}.`:'Haz la lección del día y conversa 5 turnos con Sam.']}}
  const L=a=>Array.isArray(a)?a.filter(Boolean).map(String):[];
  const rec={t:Date.now(),min,xp,avg,n:items.length,resumen:String(rc.resumen||''),aprendido:L(rc.aprendido).slice(0,8),puntajes:String(rc.puntajes||''),mejorar:L(rc.mejorar).slice(0,5),tareas:L(rc.tareas).slice(0,2),ai:aiCfg()};
  S.recaps=S.recaps||[];S.recaps.push(rec);if(S.recaps.length>60)S.recaps.shift();save();
@@ -1326,7 +1729,7 @@ function startScreen(){const t=dailyToday();const ov=$('#startOv');
   if(t&&t.done){show('home');await coachSay('¡Qué bueno verte otra vez, Yonathan! Ya hiciste la lección de hoy. Puedes hablar con el tutor, pronunciar o hacer tu repaso.',{mood:'happy'})}else runDaily()};
  $('#startSkip').onclick=()=>{ov.classList.remove('show')}}
 
-function homeDailyHTML(){const t=dailyToday();const it=t?DATA.idioms.find(x=>x.id===t.id):null;
+function homeDailyHTML(){const t=dailyToday();const it=itemOf(t);
  return `<div class="card daily-hero"><div class="row" style="justify-content:space-between;margin:0"><b>📅 Lección del día</b>${t&&t.done?'<span>✅ hecha</span>':''}</div>${it?`<div class="en">${esc(it.en)}</div><div class="es">${esc(it.es)}</div>`:''}<div class="row"><button class="pri big" onclick="runDaily(${t&&t.done?'true':''})">${t&&t.done?'➕ Otra frase':'▶ Empezar lección'}</button>${Object.keys(SESSION.items).length||SESSION.cors.length?`<button onclick="endSession('#v-home')">🏁 Terminar sesión</button>`:''}</div></div>`}
 
 banner();initSettings();updateHeader();{const h=location.hash.slice(1);show(document.getElementById('v-'+h)&&h!=='daily'?h:'home')}
