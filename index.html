@@ -160,6 +160,7 @@ details{margin:.5rem 0}summary{cursor:pointer;color:var(--acc);font-weight:600;p
 .hlw{font-weight:600}.hlw b.lbad{color:#ef4444;text-decoration:underline}.hlw b.lmid{color:#f59e0b}.hlw.omit{color:#ef4444;text-decoration:line-through}b.lbad{color:#ef4444}
 .exact .big{font-size:2rem;letter-spacing:.02em}
 .quiet{display:flex;gap:.5rem;flex-wrap:wrap;margin:.25rem 0;opacity:.8}.qm{display:flex;align-items:center;gap:.25rem;font-size:.7rem}.qm i{font-style:normal}.qb{display:inline-block;width:46px;height:5px;background:#ffffff22;border-radius:3px;overflow:hidden}.qb span{display:block;height:100%}
+#tuBar.free .state{cursor:default;user-select:none}a.txtlink{color:var(--acc);font-size:.85rem;text-decoration:underline;padding:.25rem .4rem}.hlsent{font-size:1.25rem;line-height:1.5}
 </style></head><body>
 <header class="top">
   <div class="brand">🗽 Fluent Coach</div>
@@ -743,7 +744,7 @@ async function azAttempt(it,card,o={}){const res=card.querySelector('.res'),live
   const wd=weak&&(weak.phon||[]).map(phDiag).sort((a,b)=>a.acc-b.acc)[0];
   if(S.settings.coachEs!==false){const pt=!weak?prosodyTip(r,it.en):null;
    await speak(verdict(r.pa)||say('ok'),{lang:'es'});
-   if(weak&&v.score<90){await speak(exactSay(weak)+' '+say('listen'),{lang:'es'});await speak(/^i$/i.test(weak.w)?'I':weak.w,{rate:0.8});await speak(say('you'),{lang:'es'})}
+   if(weak&&v.score<90){await speak(exactSay(weak,it.en)+' '+say('listen'),{lang:'es'});await speak(/^i$/i.test(weak.w)?'I':weak.w,{rate:0.8});await speak(say('you'),{lang:'es'})}
    else if(pt){const ex=res.querySelector('.fb')||res;ex.insertAdjacentHTML('beforeend',`<div class="small">${pt.html}</div>`);await speak(pt.say,{lang:'es'});await speak(it.en,{mark:pt.mark,rate:0.9});await speak(say('you'),{lang:'es'})}}
   if(lb&&S.settings.autoLoop&&document.body.contains(lb)){lb.remove();coachLoop(it,res.querySelector('.loop'),r,o)}}
  return v}
@@ -1069,7 +1070,10 @@ function tutorSystem(mode,topic){const lvl=S.tests.length?S.tests[S.tests.length
  const ratio=cl==='es'?`LANGUAGE RATIO "Más español": the student is a beginner who does not understand much spoken English yet. Speak to him MAINLY IN SPANISH (about 75-80% of what you say): greet, guide, explain, give feedback and corrections in friendly, simple Mexican Spanish. In each turn introduce only ONE short English phrase (3-8 words), explain in Spanish what it means and when to use it, and ask him to repeat it (put it in "practice"). Then ask him a very simple question he can answer in English, and give him a model answer in "practice" or as an English segment. If he answers in Spanish, that is OK: show him how to say it in English.`
   :cl==='mix'?`LANGUAGE RATIO "Mitad y mitad": speak about half in Spanish and half in simple English. Use Spanish for explanations, corrections and instructions; use short, simple English sentences for the conversation itself, and give one English phrase to repeat each turn in "practice".`
   :`LANGUAGE RATIO "Más inglés": speak mostly in simple, natural English (short sentences). Use Spanish only for explanations of corrections, instructions and a short summary when something might be hard. Still give one useful English phrase to repeat in "practice".`;
- const m=mode==='free'?`TUTOR LIBRE — you are his friendly personal tutor, like a bilingual friend. You opened by asking what he wants to talk about today. Whatever topic he picks (e.g. how to order in a restaurant, a job interview, small talk), talk WITH him mostly in Spanish like a real person: give practical advice and concrete English examples (e.g. "te aconsejo decir: I'd like the chicken, please; así suena más natural"). When useful, contrast the most basic way with the more natural way, invite him to try saying it, and offer to role-play the situation (you play the waiter, interviewer, etc.); if he accepts, stay in the role and speak your role lines in short simple English, stepping out in Spanish only to coach. Always end with a short follow-up question or invitation so the conversation keeps going. FREE CORRECTOR: whenever his attempt (English or Spanish mixed with English) has a grammar, word-choice or pronunciation problem, correct it naturally in conversational Spanish inside your reply (say what sounded off and the right way, then ask him to repeat it) AND list it in "corrections"; put the phrase he should repeat in "practice". Gently fix an obvious Spanish slip only if it helps clarity (light touch, at most once in a while). Keep every turn SHORT: 1 to 3 short sentences in total, like a quick phone chat.`
+ const m=mode==='free'?`TUTOR LIBRE — FRIEND ON A PHONE CALL. You are Sam, his bilingual buddy chatting with him on a call, NOT a teacher giving a lesson. Be casual and genuine: react like a real friend ("¡No manches, qué padre!", "Uy, qué estrés", "Jaja, me pasa igual"), share a tiny bit about yourself sometimes, and ask follow-up questions about HIS life (work, family, plans, what happened, how he felt). Talk mostly in relaxed Mexican Spanish and slip in natural English he can use for that situation ("ahí puedes decir: I'd like the chicken, please"); when it fits, contrast the very basic way with the more natural way, and offer to act out the situation (you play the waiter, the boss, the neighbor) if he wants. REMEMBER what he tells you this session (names, places, plans, problems) and bring it back naturally later.
+TOPICS: he can pick any topic. If he says he doesn't know, says "propónme algo", or the topic runs dry, PROPOSE 2 or 3 varied, concrete topics in one sentence (mix everyday life, his interests, a fun role-play), different from topics already offered, and let him choose.
+CORRECTIONS: at most ONE important correction per turn (grammar, tense, preposition or word choice), woven in lightly and kindly in Spanish inside your reply (e.g. "por cierto, se dice I went, no I go, porque fue ayer"), then put the correct phrase in "practice" so he can say it. If the app note says it already corrected his pronunciation this turn, do NOT add any correction (corrections: []). If his message just repeats a phrase you gave him, react warmly in a few words and keep the conversation going. NEVER use lesson or drill language (no "ejercicio", "lección", "práctica", "paso", "repite después de mí"), never mention scores, numbers or percentages.
+Keep every turn SHORT: 1 to 3 short sentences in total, like a quick phone chat, and end with a question or an invitation so the chat keeps flowing.${TU&&TU.mem&&TU.mem.length?`\nWhat you already know about him (refer back to it naturally): ${TU.mem.join('; ')}.`:''}${TU&&TU.offered&&TU.offered.length?`\nTopics already offered (offer different ones next time): ${TU.offered.slice(-9).join('; ')}.`:''}`
   :mode==='explain'?'EXPLAIN — the student wants you to explain a topic. Explain clearly and simply (concrete examples), check understanding, and teach the key English phrases for that topic.'
   :mode==='daily'?`DAILY LESSON — today's lesson phrase is "${topic}". He just practiced pronouncing it. Now hold a short, guided, beginner-friendly conversation in which you ask him easy questions that make him USE this phrase (and small variations). Give him model answers to repeat.`
   :'CONVERSATION (Tema libre) — he chose the topic himself; talk about it (or anything he brings up), be curious and keep it flowing.';
@@ -1089,22 +1093,22 @@ ${slang}
 - Spanish-style phonetic respelling: read it like Spanish, mark the stressed syllable with an accent, and use: th = /θ/ (think), dh = /ð/ (this), sh = /ʃ/, ch = /tʃ/, dy = /dʒ/ (job = dyab), j = English h (house = jáus), y = /j/, v = real v, z = buzzing z, ii = long ee, uu = long oo, æ = cat vowel, er = /ɝ/, a = schwa or /ʌ/, flap t between vowels = r (water = uárer). Example: "How are you doing?" -> "jáu ar yu dúin?"
 - Return ONLY a JSON object with exactly these keys:
 {"segments":[{"lang":"es","text":"..."},{"lang":"en","text":"...","pr":"...","es":"..."}],"practice":{"en":"short English phrase for him to repeat now","pr":"respelling","es":"Spanish meaning"},"corrections":[{"original":"his wrong phrase","corrected":"correct phrase","corrected_pr":"respelling","explanation_es":"brief explanation in Spanish"}],"natural":{"text":"how a native would say his whole last message in English (null if already natural)","pr":"respelling","es":"Spanish meaning"},"vocab":[{"word":"useful English word or phrase","pr":"respelling","meaning_es":"meaning in Spanish"}],"pron_tips":[{"word":"","pr":"","tip_es":""}],"encouragement_es":"one short honest, motivating comment in Spanish"}
-Use empty arrays / null when there is nothing to report. Never break character, never mention JSON.`}
+Use empty arrays / null when there is nothing to report. Never break character, never mention JSON.${mode==='free'?' In this mode also add "memory":["short new facts he told you this turn, in Spanish"] and "topics_offered":["each topic you proposed this turn"], and keep "natural", "vocab" and "pron_tips" empty/null; "corrections" has at most 1 item.':''}`}
 /* normalize: older/other-shaped answers -> segments */
 function tuSegs(j){if(Array.isArray(j.segments)&&j.segments.length)return j.segments.filter(x=>x&&x.text);const o=[];if(j.reply)o.push({lang:'en',text:j.reply,pr:j.reply_pr||'',es:j.reply_es||''});if(j.followup&&typeof j.followup==='string'&&!(j.reply||'').includes(j.followup.slice(0,20)))o.push({lang:'en',text:j.followup,pr:'',es:''});return o}
 function tuPlain(j){return tuSegs(j).map(x=>x.text).join(' ')}
 let TU=null;
 const FREE_GREET=['¡Hola, Yonathan! Qué gusto que estés aquí. Hoy soy tu tutor libre: hablamos de lo que tú quieras.','¡Hey, Yonathan! Qué bueno verte. Aquí platicamos de lo que se te antoje y yo te ayudo con el inglés.','¡Hola! Me da mucho gusto platicar contigo otra vez. Hoy tú eliges el tema y yo te acompaño.','¡Qué tal, Yonathan! Listo para practicar sin presiones. Tú mandas hoy.'];
 const FREE_ASK='¿De qué quieres empezar a hablar hoy?';
-const FREE_IDEAS=['Cómo pedir en un restaurante','Mi trabajo','Una entrevista de trabajo','Hablar con mis vecinos','Ir al doctor','Viajar en avión','Comprar ropa','Hacer amigos'];
+const FREE_POOL=['cómo pedir en un restaurante','tu trabajo y cómo te fue esta semana','un viaje que te gustaría hacer','tu comida favorita','una entrevista de trabajo, actuada','hablar con un vecino nuevo','ir al doctor','tu familia','fútbol y deportes','una película o serie que te guste','comprar ropa en una tienda','tus planes para el fin de semana','pedir direcciones en la calle','tu infancia','hacer amigos en Estados Unidos','llamar para hacer una cita','música que te gusta','qué harías con un día libre'];
+function freeTopics(n){S.freeIdx=(S.freeIdx||0);const out=[];for(let k=0;k<n;k++){out.push(FREE_POOL[(S.freeIdx+k*5)%FREE_POOL.length])}S.freeIdx=(S.freeIdx+1)%FREE_POOL.length;save();return out}
 /* Tutor libre: local warm greeting (no API call), then free conversation with the AI */
 function startFree(force){show('tutor');$$('nav#tabs button').forEach(b=>b.classList.toggle('act',b.dataset.tab==='free'));location.hash='free';
  if(!aiCfg()){$('#v-tutor').innerHTML=`<h2>🧑‍🏫 Tutor libre</h2><div class="card"><p>Aquí Sam platica contigo de <b>lo que tú quieras</b>, te aconseja cómo decirlo en inglés y te corrige con cariño.</p><p>${FREE_ASK} … Para empezar necesito tu <b>clave de IA</b> (xAI u OpenAI). Se guarda solo en este iPhone.</p><button class="pri big" onclick="show('settings')">⚙️ Configurar clave</button></div>`;coachSay('Para platicar en el tutor libre necesito que configures tu clave de inteligencia artificial en Ajustes.',{mood:'concern'});return}
  if(!force&&TU&&TU.mode==='free'&&TU.msgs.length){tuRender();return}
- tuNew('free','');tuRender();const g=pick(FREE_GREET);const st={role:'sam',j:{segments:[{lang:'es',text:g+' '+FREE_ASK}],practice:null,corrections:[],natural:null,vocab:[],pron_tips:[]},opening:true};
- TU.turns.push(st);TU.msgs.push({role:'assistant',content:'[es] '+g+' '+FREE_ASK});$('#tuLog').insertAdjacentHTML('beforeend',tuTurnHTML(st)+`<div class="chips" id="freeIdeas">${FREE_IDEAS.map(x=>`<button class="sm" data-fi="${esc(x)}">${esc(x)}</button>`).join('')}</div>`);
- $$('#freeIdeas [data-fi]').forEach(b=>b.onclick=()=>{$('#freeIdeas').remove();tuSend(b.dataset.fi)});S.tutorCur=tuSerialize();save();
- TU.stopSpeak=false;TU.paused=false;tuState('speak');coachSay(esc(g)+' <b>'+FREE_ASK+'</b>',{es:g+' '+FREE_ASK,mood:'happy'}).then(()=>{if(TU&&TU.mode==='free'&&!TU.stopSpeak)tuAfterSpeak()})}
+ tuNew('free','');TU.call=true;TU.mem=[];TU.offered=[];tuRender();const tp=freeTopics(3);TU.offered.push(...tp);const g=pick(FREE_GREET);const g2=' '+pick(['Si no se te ocurre nada, te propongo','Por si no sabes, se me ocurre','Si quieres, podemos hablar de'])+' '+tp[0]+', '+tp[1]+' o '+tp[2]+'.';const st={role:'sam',j:{segments:[{lang:'es',text:g+' '+FREE_ASK+g2}],practice:null,corrections:[],natural:null,vocab:[],pron_tips:[]},opening:true};
+ TU.turns.push(st);TU.msgs.push({role:'assistant',content:'[es] '+g+' '+FREE_ASK+g2});$('#tuLog').insertAdjacentHTML('beforeend',tuTurnHTML(st));S.tutorCur=tuSerialize();save();
+ TU.stopSpeak=false;TU.paused=false;tuState('speak');coachSay(esc(g)+' <b>'+FREE_ASK+'</b>'+esc(g2),{es:g+' '+FREE_ASK+g2,mood:'happy'}).then(()=>{if(TU&&TU.mode==='free'&&!TU.stopSpeak)tuAfterSpeak()})}
 function tuNew(mode,topic){TU={id:Date.now(),mode,topic,msgs:[],turns:[],t0:Date.now(),pron:[],ctl:null,busy:false};S.tutorCur=TU;save()}
 function tuTrim(){/* keep system + last 14 messages to bound cost */return TU.msgs.slice(TU.mode==='free'?-24:-14)}
 const TU_TOPICS=[['Mi día','Let\'s talk about my day.'],['Viajes','I want to talk about travel.'],['Trabajo','Let\'s talk about my job.'],['Tecnología e IA','Let\'s talk about technology and AI.'],['Películas y series','Let\'s talk about movies and TV shows.'],['Fútbol / deportes','Let\'s talk about sports.'],['Comida','Let\'s talk about food and cooking.'],['Entrevista de trabajo (simulacro)','Can we practice a job interview? You are the interviewer.']];
@@ -1125,6 +1129,7 @@ function renderTutor(){const v=$('#v-tutor');
  $('#tuCL').onchange=e=>{S.settings.coachLang=e.target.value;save()};$('#tuDr').onchange=e=>{S.settings.tuDrill=e.target.checked;save()};$('#tuSl').onchange=e=>{S.settings.tuSlang=e.target.checked;save()};
  $('#tuGo').onclick=()=>{const t=$('#tuTopic').value.trim();tuNew(mode,t);tuRender();tuSend(t||(mode==='explain'?'Pregúntame qué tema quiero que me expliques.':'Tema libre: pregúntame de qué quiero hablar hoy y dame 3 ideas.'),{opening:true})}}
 function tuTurnHTML(t){if(t.role==='user')return tuUserHTML(t);
+ if(TU&&TU.mode==='free'){const j=t.j||{};const c=t.opening?null:(j.corrections||[]).find(x=>x&&x.corrected);return `<div class="msg sam">${tuSegs(j).map(x=>x.lang==='es'?`<p class="sp-es">${esc(x.text)}</p>`:`<div class="seg-en"><div class="en">${esc(x.text)}</div>${x.pr?`<div class="pr">🗣️ ${prHTML(x.pr)}</div>`:''}${x.es?`<div class="es">${esc(x.es)}</div>`:''}</div>`).join('')}${c?`<div class="cor small"><span class="mut">Dijiste:</span> <s>${esc(c.original)}</s> · <span class="mut">Mejor:</span> <b>${esc(c.corrected)}</b></div>`:''}</div>`}
  const j=Object.assign({},t.j||{});if(t.opening){j.corrections=[];j.natural=null;j.pron_tips=[];j.encouragement_es=''}const cor=(j.corrections||[]).filter(c=>c&&c.corrected);
  const segs=tuSegs(j),pc=j.practice&&j.practice.en?j.practice:null;
  return `<div class="msg sam">${segs.map(x=>x.lang==='es'?`<p class="sp-es">${esc(x.text)}</p>`:`<div class="seg-en"><div class="en">${esc(x.text)}</div>${x.pr?`<div class="pr">🗣️ ${prHTML(x.pr)}</div>`:''}${x.es?`<div class="es">${esc(x.es)}</div>`:''}<div class="row" style="margin-top:.2rem"><button class="sm" data-say="${esc(x.text)}">🔊 Oír</button><button class="sm" data-say="${esc(x.text)}" data-slow="1">🐢 Lento</button><button class="sm" data-prac="${esc(x.text)}" data-pr="${esc(x.pr||'')}" data-es="${esc(x.es||'')}">🎯 Practicar</button></div></div>`).join('')}
@@ -1581,9 +1586,7 @@ function wordHL(w,T){T=T||S.settings.threshold||80;const word=w.w||'';if(w.err==
 function worstPh(w){return (w.phon||[]).map(phDiag).sort((a,b)=>a.acc-b.acc)[0]||null}
 function letterOf(w,d){const sp=phSpans(w.w,w.phon||[]);const k=(w.phon||[]).findIndex(x=>x.p===d.exp&&x.acc===d.acc);const s=sp[k];return s?String(w.w).slice(s[0],s[1]):''}
 /* exact, natural spoken correction for one word */
-function exactSay(w){const d=worstPh(w);if(w.err==='Omission'||!d)return `La palabra "${w.w}" casi no se escuchó. Dila con calma.`;
- const f=phSay(d.exp);const where=phWhere(w,d)||'un sonido';const miss=d.acc<45;
- return `En "${w.w}" ${miss?'te faltó':'no sonó bien'} ${where}${f?': '+f[1]:''}.`}
+function exactSay(w,phrase){return exactLine(w,phrase).replace(/ Dilo conmigo: "[^"]*"\.$/,'')}
 function exactTipHTML(w){const d=worstPh(w);const f=d&&phSay(d.exp);const lt=d?letterOf(w,d):'';
  return `<div class="exact"><div class="big">${wordHL(w)}</div>${lt?`<div class="small">Fíjate en <b class="lbad">${esc(lt)}</b>${d.heard&&phSay(d.heard)?` · sonó parecido a la de «${esc(phSay(d.heard)[0])}»`:''}</div>`:''}${f?`<div class="small">👄 ${esc(f[1].charAt(0).toUpperCase()+f[1].slice(1))}.</div>`:''}<details class="small"><summary>Ver detalle</summary>${wordDetail(w)}</details></div>`}
 /* ---- overall verdict (spoken, no numbers) + quiet metrics on screen ---- */
@@ -1628,15 +1631,71 @@ function streamSpeaker(onSay){const q=[],sent=[];let done=false,wake=null,stoppe
    if(cut>0){push({lang:s.lang,text:t.slice(0,cut).trim(),seg:i});sent[i]=off+cut}})},
   finish(){done=true;if(wake){const w=wake;wake=null;w()}},stop(){stopped=true;q.length=0;if(wake){const w=wake;wake=null;w()}},
   async run(){while(!stopped&&!(TU&&TU.stopSpeak)){if(q.length){const x=q.shift();if(x.text){onSay&&onSay(x);await speak(x.text,{lang:x.lang})}}else if(done)break;else await new Promise(r=>wake=r)}}}}
+/* ---- precise, articulatory Spanish coaching ---- */
+const LETTER_ES={a:'a',b:'be',c:'ce',d:'de',e:'e',f:'efe',g:'ge',h:'hache',i:'i',j:'jota',k:'ka',l:'ele',m:'eme',n:'ene',o:'o',p:'pe',q:'cu',r:'erre',s:'ese',t:'te',u:'u',v:'ve',w:'doble u',x:'equis',y:'i griega',z:'zeta'};
+function letterName(lt){lt=String(lt||'').toLowerCase().replace(/[^a-z]/g,'');if(!lt)return'';if(lt.length===2&&lt[0]===lt[1])return'la doble '+LETTER_ES[lt[0]];return'la '+lt.split('').map(c=>LETTER_ES[c]||c).join(' ')}
+const ART={'ʃ':'Redondea los labios hacia adelante, sube la lengua cerca del paladar sin tocarlo y suelta el aire suave y largo: shhh.',
+ 'ʒ':'Igual que la sh, con los labios hacia adelante, pero con voz: que te vibre la garganta.',
+ 'tʃ':'Pega la lengua detrás de los dientes de arriba y suéltala de golpe, como en chocolate.',
+ 'dʒ':'Como una ch pero con voz: pega la lengua arriba y suéltala vibrando, como «dy».',
+ 'θ':'Saca la puntita de la lengua entre los dientes, sin morderla, y sopla aire suave, sin voz: thhh.',
+ 'ð':'Pon la lengua entre los dientes, igual que la th, pero con voz: que te vibre la lengua.',
+ 'v':'Apoya los dientes de arriba en el labio de abajo, sin juntar los labios, y haz que vibre: vvv.',
+ 'b':'Junta bien los dos labios y suéltalos con voz.',
+ 'z':'Pon la lengua como para una ese y agrégale voz, que zumbe como abeja: zzz.',
+ 's':'Lengua detrás de los dientes y un aire fino y continuo; no le pongas una e antes.',
+ 'ɪ':'Relaja la boca, casi sin sonreír, y hazla cortita; no la estires.',
+ 'i':'Sonríe un poquito, sube la lengua y estírala: iii.',
+ 'æ':'Abre la mandíbula como para una a, pero estira los labios como para una e.',
+ 'ʌ':'Boca relajada y medio abierta: una a cortita, sin fuerza.',
+ 'ə':'Relaja todo y casi no abras la boca: una vocal suavecita y rapidita.',
+ 'ɝ':'Recoge la lengua hacia atrás sin tocar el paladar y redondea un poco los labios: er.','ɚ':'Al final recoge la lengua hacia atrás, sin tocar nada, y deja una r suave: er.',
+ 'ɹ':'La lengua no toca nada: recógela hacia atrás y redondea un poco los labios; no la hagas vibrar.',
+ 'h':'Solo aire, como cuando empañas un espejo; no raspes la garganta como una jota.',
+ 'ŋ':'Sube la parte de atrás de la lengua al paladar y deja salir el sonido por la nariz; no le agregues g.',
+ 'w':'Pon los labios redonditos, como para una u, y ábrelos rápido.',
+ 'ʊ':'Labios apenas redondeados; hazla cortita y floja.','u':'Labios bien redondos hacia adelante y alárgala: uuu.',
+ 'j':'Es una i rapidita al empezar, suave, sin apretar como la ye.','l':'La punta de la lengua toca arriba, detrás de los dientes; al final de la palabra no la sueltes rápido.',
+ 'eɪ':'Empieza en e y desliza hacia i: «ei».','oʊ':'Empieza en o y cierra los labios hacia u: «ou».','aɪ':'Empieza en a y sube hacia i: «ai».','ɛ':'Boca medio abierta, una e cortita.','ɑ':'Abre bien la mandíbula, una a grande y relajada.'};
+const SUBN={s:'una ese',z:'una ese',ʃ:'una sh','tʃ':'una che',b:'una be',v:'una ve',t:'una te',d:'una de',f:'una efe',i:'una i larga',ɪ:'una i corta',j:'una ye','dʒ':'una ye',h:'una jota',ɛ:'una e',ɑ:'una a',ʌ:'una a',æ:'una a',oʊ:'una o',ɔ:'una o',u:'una u larga',ʊ:'una u corta',n:'una ene',g:'una ge',k:'una ka',p:'una pe',l:'una ele',ɹ:'una erre española',ə:'una vocal completa'};
+const STOPS=new Set(['t','d','k','g','p','b','s','z','v','f','θ','ð','ʃ','tʃ','dʒ','l','n','m','ŋ']);
+function substText(w,d){const ph=w.phon||[];const last=ph.length&&ph[ph.length-1]===ph.find(x=>x.p===d.exp&&x.acc===d.acc)&&ph.length>1;
+ if(last&&STOPS.has(d.exp)&&d.acc<45)return'se te perdió el sonido del final';
+ if(d.exp==='ə'&&d.heard)return'dijiste la vocal completa; aquí va suavecita, casi un murmullo';
+ if(d.heard){if(d.exp==='ɹ')return'te salió como una erre española';const n=SUBN[d.heard];if(n)return'te salió como '+n;const f=phSay(d.heard);if(f)return`te salió como el sonido de "${f[0]}"`}
+ return''}
+/* phrase + word + letters, praise first, concrete articulation, then "Dilo conmigo" */
+function exactLine(w,phrase,{praise=true}={}){const d=worstPh(w);const ph=(phrase||'').trim();const inPh=ph&&ph.split(/\s+/).length>1?`En la frase "${ph}", `:'';
+ if(w.err==='Omission'||!d)return `${praise?pick(['Se entendió casi todo.','Vas muy bien.'])+' ':''}${inPh?inPh+'n':'N'}o se escuchó la palabra "${w.w}". Dila con calma. Dilo conmigo: "${w.w}".`;
+ const lt=letterOf(w,d);const ln=letterName(lt);const sub=substText(w,d);const art=ART[String(d.exp).replace(/[ːˈˌ]/g,'')]||(phSay(d.exp)?phSay(d.exp)[1].replace(/^./,c=>c.toUpperCase())+'.':'');
+ const finalDrop=/perdió el sonido del final/.test(sub);const art2=finalDrop?'Termina la palabra marcando ese sonido final, cortito pero claro; no te lo comas.':art;
+ const pr=praise?pick(['Está muy bien, pero','Muy bien, solo que','Se entendió, pero','Casi perfecto, pero'])+' ':'';
+ const where=ln?`${ln} de "${w.w}"`:`la palabra "${w.w}"`;
+ return `${pr}${inPh?inPh.charAt(0).toLowerCase()+inPh.slice(1):''}te equivocaste en ${where}${sub?': '+sub:''}. ${art2} Dilo conmigo: "${/^i$/i.test(w.w)?'I':w.w}".`.replace(/^([a-zé])/,c=>c.toUpperCase())}
+function sentenceHL(words,T){T=T||S.settings.threshold||80;return words.filter(w=>w.err!=='Insertion').map(w=>(w.acc!=null&&w.acc<T)||w.err==='Omission'?wordHL(w,T):esc(/^i$/i.test(w.w)?'I':w.w)).join(' ')}
 
 /* ================= Conversation UI: call mode, state banner, streaming replies, exact correction drills ================= */
 const ST={listen:['🎤 Te escucho… habla ahora','Cuando termines, solo quédate callado un segundo.'],listenManual:['🎤 Te escucho… habla ahora','Toca aquí cuando termines.'],
  speak:['🔊 Sam está hablando…','Toca aquí si quieres interrumpir y hablar tú.'],think:['⏳ Sam está pensando…','Un momentito.'],
  idle:['👉 Toca para seguir','Y habla cuando veas «Te escucho».'],paused:['⏸️ Llamada en pausa','Toca para seguir platicando.'],sound:['👂 Haz el sonido tú…','Solo el sonido, sin la palabra.'],
  noHear:['👉 No te escuché','Toca para intentarlo otra vez.']};
-function tuState(k){if(!TU)return;TU.st=k;const b=$('#tuState');if(!b)return;const x=ST[k]||ST.idle;b.dataset.k=k;b.className='state st-'+k;b.innerHTML=`<span class="st1">${x[0]}</span><span class="st2">${x[1]}</span>`;AV().classList.toggle('listening',k==='listen'||k==='listenManual')}
+const STF={listen:['🎤 Te escucho… habla ahora','Cuando termines, quédate callado un segundo.'],listenManual:['🎤 Te escucho… habla ahora','Cuando termines, quédate callado un segundo.'],speak:['🔊 Sam está hablando…','Escúchalo; cuando termine, te toca.'],think:['⏳ Sam está pensando…','Un momentito.'],idle:['⏸️ En pausa','Toca «Seguir» para continuar.'],paused:['⏸️ En pausa','Toca «Seguir» para continuar.'],sound:['👂 Haz el sonido tú…','Solo el sonido.'],noHear:['⏸️ No te escuché','Toca «Seguir» cuando quieras continuar.']};
+function tuState(k){if(!TU)return;TU.st=k;const b=$('#tuState');if(!b)return;const x=(TU.mode==='free'?STF:ST)[k]||ST.idle;const pl=$('#tuPauseF');if(pl)pl.textContent=k==='paused'||k==='idle'||k==='noHear'?'▶ Seguir':'Pausar';const kb=$('#tuKbF');if(kb)kb.classList.toggle('hide',!(k==='paused'||k==='idle'||k==='noHear'));b.dataset.k=k;b.className='state st-'+k;b.innerHTML=`<span class="st1">${x[0]}</span><span class="st2">${x[1]}</span>`;AV().classList.toggle('listening',k==='listen'||k==='listenManual')}
 function tuCallOn(){return !!(TU&&TU.call&&!TU.paused)}
-function tuRender(){const v=$('#v-tutor');if(TU.call==null)TU.call=TU.mode==='free'?S.settings.callFree!==false:S.settings.callOther===true;
+function tuRender(){const v=$('#v-tutor');if(TU.call==null)TU.call=TU.mode==='free'?true:S.settings.callOther===true;
+ if(TU.mode==='free'){TU.call=true;v.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin:0">🧑‍🏫 Tutor libre</h2><a href="#" class="txtlink" id="tuEndF">Terminar</a></div><div id="tuLog"></div>
+  <div id="tuBar" class="free"><div id="tuState" class="state" role="status" aria-live="polite"></div><div id="tuLive" class="small mut"></div>
+  <div class="row tuctl"><a href="#" class="txtlink" id="tuPauseF">Pausar</a><a href="#" class="txtlink" id="tuLangF"></a><a href="#" class="txtlink hide" id="tuKbF">⌨️ Prefiero escribir</a></div>
+  <div class="row hide" id="tuType" style="flex-wrap:nowrap;margin:0"><input type="text" id="tuText" placeholder="Escribe tu mensaje…" enterkeyhint="send"><button class="pri" id="tuSendB">Enviar</button></div></div>`;
+  const log=$('#tuLog');TU.turns.forEach(t=>log.insertAdjacentHTML('beforeend',tuTurnHTML(t)));const pv=e=>e&&e.preventDefault();
+  const langLbl=()=>$('#tuLangF').textContent=S.settings.tuInLang==='es'?'Hablo en español':'Hablo en inglés';langLbl();
+  $('#tuEndF').onclick=e=>{pv(e);tuEnd()};
+  $('#tuPauseF').onclick=e=>{pv(e);AUD.unlock();if(TU.st==='paused'||TU.st==='idle'||TU.st==='noHear'){TU.paused=false;tuListen()}else{TU.paused=true;TU.stopSpeak=true;if(TU.ctl){TU.ignoreNext=true;TU.ctl.stop()}if(LOOP)LOOP.stop=true;AZ.stop();stopAudio();TTS&&TTS.cancel();setTimeout(()=>tuState('paused'),450)}};
+  $('#tuLangF').onclick=e=>{pv(e);S.settings.tuInLang=S.settings.tuInLang==='es'?'en':'es';save();langLbl()};
+  $('#tuKbF').onclick=e=>{pv(e);$('#tuType').classList.toggle('hide');if(!$('#tuType').classList.contains('hide'))$('#tuText').focus()};
+  $('#tuSendB').onclick=()=>{const t=$('#tuText').value.trim();if(!t)return;$('#tuText').value='';$('#tuType').classList.add('hide');TU.paused=false;tuSend(t)};
+  $('#tuText').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#tuSendB').click()}};
+  tuState(TU.busy?'think':'speak');setTimeout(()=>log.lastElementChild&&log.lastElementChild.scrollIntoView({block:'end'}),50);return}
  v.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin:0">${TU.mode==='daily'?'📅 Lección del día':TU.mode==='free'?'🧑‍🏫 Tutor libre':TU.mode==='explain'?'🤖 Explícame':'💬 Tema libre'}: <span class="small mut">${esc(TU.topic||(TU.mode==='free'?'tú eliges':'tema libre'))}</span></h2><button class="sm" id="tuEnd">🏁 Terminar sesión</button></div>
  <div id="tuLog"></div>
  <div id="tuBar"><button id="tuState" class="state"></button><div id="tuLive" class="small mut"></div>
@@ -1664,7 +1723,7 @@ async function tuListen(){if(!TU||TU.busy||TU.ctl||TU.drilling)return;TU.stopSpe
  if(AZ.cfg()&&MIC.supported()){try{tuState(call?'listen':'listenManual');
    TU.ctl=await AZ.free({onText:live,silenceMs:call?1200:(S.settings.tuSilence||0),idleMs:call?15000:0,lang:lng});
    const r=await TU.ctl.done;TU.ctl=null;live('');if(!TU)return;if(TU.ignoreNext){TU.ignoreNext=false;return}
-   if(r.error&&!r.text){tuState('noHear');coachSay(azErr(r),{mood:'concern'});return}if(!r.text){tuState('noHear');return}
+   if(r.error&&!r.text){tuState('noHear');coachSay(azErr(r),{mood:'concern'});return}if(!r.text){if(TU.mode==='free'){TU.paused=true}tuState('noHear');return}
    phStat(r.words);if(r.pa.pron!=null&&r.words.length){TU.pron.push(r.pa.pron);const t=today();t.att++;t.sum+=r.pa.pron;S.hist=S.hist||[];S.hist.push([Date.now(),r.pa.pron])}
    const ms=r.first&&r.last?r.last-r.first+1200:0;const a=analyzeSpeech(r.text,ms);if(a.wpm&&a.n>=8)S.wpm.push([Date.now(),a.wpm]);save();
    tuSend(r.text,{pa:r.words.length?r:null})}catch(e){TU.ctl=null;tuState('idle');micFail(e)}return}
@@ -1678,13 +1737,14 @@ function tuAfterSpeak(){if(!TU||TU.busy||TU.drilling)return;if(TU.paused){tuStat
 function bargeWatch(){if(!S.settings.tuBarge||!MIC.stream)return()=>{};let n=0;const iv=setInterval(()=>{if(!TU||TU.st!=='speak')return;if(MIC.level>0.09){if(++n>=3){clearInterval(iv);tuStateTap()}}else n=0},100);return()=>clearInterval(iv)}
 async function tuSay(text,o={}){if(!TU||TU.stopSpeak&&!o.force)return;tuState('speak');await speak(text,o)}
 
-function tuUserHTML(t){if(!t.pa)return `<div class="msg me"><div>${esc(t.text)}</div></div>`;const T=S.settings.threshold||80;const W=(t.pa.words||[]).filter(w=>w.err!=='Insertion');const allW=W.length>=2;
+function tuUserHTML(t){const h=tuUserHTML0(t);return TU&&TU.mode==='free'?h.replace(/<button\b[^>]*>[\s\S]*?<\/button>/g,''):h}
+function tuUserHTML0(t){if(!t.pa)return `<div class="msg me"><div>${esc(t.text)}</div></div>`;const T=S.settings.threshold||80;const W=(t.pa.words||[]).filter(w=>w.err!=='Insertion');const allW=W.length>=2;
  const line=allW?W.map(w=>(w.acc!=null&&w.acc<T)||w.err==='Omission'?wordHL(w,T):esc(w.w)).join(' '):esc(t.text);
  return `<div class="msg me"><div>${line}</div>${t.verdict?`<div class="small">💬 ${esc(t.verdict)}</div>`:''}${paQuiet(t.pa.pa)}${t.ptip?`<div class="small">${t.ptip}</div>`:''}<details class="small"><summary>Ver detalle</summary>${renderPA(t.pa,{expandWeak:2})}</details></div>`}
 
 async function tuSend(text,{pa,opening}={}){if(!TU||TU.busy)return;if(TU.mode==='free'&&!TU.topic&&!opening){TU.topic=String(text).slice(0,60);const fi=$('#freeIdeas');if(fi)fi.remove()}
- TU.busy=true;TU.stopSpeak=false;TU.barge=false;const log=$('#tuLog');let ut=null;const ptip=pa?prosodyTip(pa,text):null;
- if(!opening){ut={role:'user',text,pa:pa||null,verdict:pa?verdict(pa.pa):'',ptip:ptip?ptip.html:''};TU.turns.push(ut);log.insertAdjacentHTML('beforeend',tuTurnHTML(ut))}
+ TU.busy=true;TU.stopSpeak=false;TU.barge=false;const log=$('#tuLog');let ut=null;const FREE=TU.mode==='free';const ptip=pa?prosodyTip(pa,text):null;
+ if(!opening){ut={role:'user',text,pa:pa||null,verdict:pa&&!FREE?verdict(pa.pa):'',ptip:ptip&&!FREE?ptip.html:''};TU.turns.push(ut);log.insertAdjacentHTML('beforeend',tuTurnHTML(ut))}
  let content=opening?`(The student opened the session. Their request/topic: "${text}". Greet him briefly in Spanish and start.)`:`Student said${pa?' (speech transcript)':' (typed)'}: "${text}"`;
  if(pa){const bad=pa.words.filter(w=>w.acc!=null&&w.acc<70&&w.err!=='Insertion').slice(0,5).map(w=>{const d=worstPh(w);return `${w.w} (${w.acc}${d&&d.heard?`, /${d.exp}/ sounded like /${d.heard}/`:d?`, weak /${d.exp}/`:''})`});
   content+=`\nPronunciation assessment (Azure, 0-100): overall ${pa.pa.pron}, accuracy ${pa.pa.acc}, fluency ${pa.pa.flu}${pa.pa.pros!=null?', prosody '+pa.pa.pros:''}.${bad.length?' Mispronounced: '+bad.join('; ')+'.':''}${ptip?' Prosody note already given by the app: '+ptip.kind+'.':''} (The app already drills pronunciation with him, so do not repeat pronunciation drills; keep your reply about the conversation and grammar.)`}
@@ -1692,17 +1752,18 @@ async function tuSend(text,{pa,opening}={}){if(!TU||TU.busy)return;if(TU.mode===
  log.insertAdjacentHTML('beforeend','<div class="msg sam typing" id="tuTyping">⏳ Sam está pensando…</div>');log.lastElementChild.scrollIntoView({behavior:'smooth',block:'end'});tuState('think');
  const T=S.settings.threshold||80;const canDrill=!opening&&S.settings.tuDrill!==false&&AZ.cfg()&&MIC.supported();
  const pron=canDrill&&pa?pa.words.filter(w=>w.err!=='Insertion'&&w.w&&w.w.replace(/[^a-z]/gi,'').length>1&&((w.acc!=null&&w.acc<T)||w.err==='Omission')).sort((a,b)=>(a.acc||0)-(b.acc||0)).slice(0,2):[];
- const drillFirst=pron.length>0||(canDrill&&!!ptip);
+ if(FREE&&pron.length){pron.length=1;TU.msgs[TU.msgs.length-1].content+=`\nApp note: the app is correcting his pronunciation of "${pron[0].w}" right now, so this turn give NO correction (corrections: []) and no practice phrase.`}
+ const drillFirst=pron.length>0||(canDrill&&!!ptip&&!FREE);
  const sp=drillFirst?null:streamSpeaker(x=>{$('#bubbleText').innerHTML=x.lang==='es'?esc(x.text):`<b>${esc(x.text)}</b>`});let spRun=null;const stopB=bargeWatch();
  const onText=acc=>{const segs=segScan(acc);if(!segs.length)return;const ty=$('#tuTyping');if(ty)ty.innerHTML=segs.map(s=>s.lang==='es'?`<p class="sp-es">${esc(s.text)}</p>`:`<div class="en">${esc(s.text)}</div>`).join('');
   if(sp&&!TU.stopSpeak){sp.feed(segs,false);if(!spRun&&sp){spRun=sp.run().then(()=>0);tuState('speak')}}};
  const req=aiChat([{role:'system',content:tutorSystem(TU.mode,TU.topic)},...tuTrim()],{maxTokens:900,onText}).then(j=>({j}),e=>({e}));
- let drilled=null;if(drillFirst){try{drilled=await tuPronDrill(pa,text,pron,ptip)}catch(e){console.warn('drill',e)}}
+ let drilled=null;if(drillFirst){try{drilled=FREE?await tuFreeFix(pa,text,pron[0]):await tuPronDrill(pa,text,pron,ptip)}catch(e){console.warn('drill',e)}}
  const {j:j0,e}=await req;if(!TU)return;let j=j0;
  if(e){$('#tuTyping')&&$('#tuTyping').remove();TU.msgs.pop();TU.busy=false;stopB();sp&&sp.stop();tuState('idle');log.insertAdjacentHTML('beforeend',`<div class="warn">⚠️ ${esc(e.message||e)} <button class="sm" onclick="this.parentNode.remove();tuSend(${esc(JSON.stringify(text))},{opening:${!!opening}})">Reintentar</button></div>`);return}
  $('#tuTyping')&&$('#tuTyping').remove();if(!tuSegs(j).length)j.segments=[{lang:'es',text:'Perdón, no te entendí bien. ¿Me lo repites?'}];
  TU.msgs.push({role:'assistant',content:tuSegs(j).map(x=>`[${x.lang}] ${x.text}`).join(' ')+(j.practice&&j.practice.en?` [practice] ${j.practice.en}`:'')});const st={role:'sam',j,opening:!!opening};TU.turns.push(st);
- const cor=opening?[]:(j.corrections||[]).filter(c=>c&&c.corrected);
+ let cor=opening?[]:(j.corrections||[]).filter(c=>c&&c.corrected);if(FREE){cor=cor.slice(0,1);if(Array.isArray(j.memory)){TU.mem=TU.mem||[];j.memory.filter(x=>typeof x==='string'&&x.trim()).forEach(x=>{if(!TU.mem.includes(x))TU.mem.push(x)});TU.mem=TU.mem.slice(-15)}if(Array.isArray(j.topics_offered)){TU.offered=TU.offered||[];TU.offered.push(...j.topics_offered.filter(x=>typeof x==='string'))}}
  cor.forEach(c=>srsAdd({id:'c_'+hash(c.corrected),en:c.corrected,pr:c.corrected_pr||'',es:'Corrección: '+(c.explanation_es||'')},true));
  if(j.natural&&j.natural.text&&!opening)srsAdd({id:'n_'+hash(j.natural.text),en:j.natural.text,pr:j.natural.pr||'',es:'Forma más natural de lo que dijiste'},true);
  if(pa)pa.words.filter(w=>w.acc!=null&&w.acc<60&&w.err!=='Insertion'&&w.w&&w.w.length>2).slice(0,3).forEach(w=>srsAdd({id:'w_'+w.w.toLowerCase(),en:w.w,pr:phRespell(w.phon||[]),es:'Palabra difícil (pronunciación)',ipa:'/'+(w.phon||[]).map(x=>x.p).join('')+'/'},true));
@@ -1712,13 +1773,15 @@ async function tuSend(text,{pa,opening}={}){if(!TU||TU.busy)return;if(TU.mode===
  S.tutorCur=tuSerialize();save();cor.forEach(c=>SESSION.cors.push(c));
  /* speak the reply */
  if(sp){if(!TU.stopSpeak){sp.feed(tuSegs(j).map(x=>Object.assign({},x,{done:true})),true);sp.finish();if(!spRun){tuState('speak');spRun=sp.run()}await spRun}else sp.stop()}
- else if(!TU.stopSpeak){if(drilled&&drilled.any)await tuSay(pick(['Ahora sí, te contesto.','Listo, sigamos.','Muy bien, seguimos platicando.']),{lang:'es'});await tuSpeakSegs(j)}
+ else if(!TU.stopSpeak){if(drilled&&drilled.any&&!FREE)await tuSay(pick(['Ahora sí, te contesto.','Listo, sigamos.','Muy bien, seguimos platicando.']),{lang:'es'});if(drilled&&drilled.any&&FREE)await tuSay(pick(['Bueno,','Oye,','Y bueno,']),{lang:'es'});await tuSpeakSegs(j)}
  /* misused words: repeat the right way until it sounds good, then re-ask */
- let misDone=false;if(canDrill&&cor.length&&!TU.stopSpeak){try{misDone=await tuMisDrill(cor.slice(0,1))}catch(err){console.warn(err)}}
- if(!misDone&&cor.length&&!opening&&!TU.stopSpeak&&S.settings.tuSpeakCor!==false&&!/corrig|se dice|mejor di|correct/i.test(tuPlain(j))){const c=cor[0];await tuSay(pick(['Un detallito:','Una cosita:','Ojo aquí:'])+' '+(c.explanation_es||'')+' '+pick(['Se dice:','Mejor di:','Lo correcto es:']),{lang:'es'});await tuSay(c.corrected)}
+ let misDone=false;if(FREE&&!cor.length&&!pron.length&&ptip&&canDrill&&!TU.stopSpeak){try{await tuFreeProsody(ptip)}catch(err){console.warn(err)}}
+ if(canDrill&&cor.length&&!TU.stopSpeak&&!FREE){try{misDone=await tuMisDrill(cor.slice(0,1))}catch(err){console.warn(err)}}
+ if(!FREE&&!misDone&&cor.length&&!opening&&!TU.stopSpeak&&S.settings.tuSpeakCor!==false&&!/corrig|se dice|mejor di|correct/i.test(tuPlain(j))){const c=cor[0];await tuSay(pick(['Un detallito:','Una cosita:','Ojo aquí:'])+' '+(c.explanation_es||'')+' '+pick(['Se dice:','Mejor di:','Lo correcto es:']),{lang:'es'});await tuSay(c.corrected)}
  if(misDone&&!TU.stopSpeak){const q=tuSegs(j).filter(x=>/\?\s*$/.test(x.text)).pop();if(q)await tuSay((q.lang==='es'?'Entonces, ':'')+q.text,{lang:q.lang})}
  const pc=j.practice&&j.practice.en?j.practice:null;
- if(TU&&!TU.stopSpeak&&pc){$('#bubbleText').innerHTML=`🔁 <b>${esc(pc.en)}</b><div class="pr">${prHTML(pc.pr||'')}</div><div class="es">${esc(pc.es||'')}</div>`;await tuSay(say('repeat'),{lang:'es'});await tuSay(pc.en,{rate:Math.max(0.6,S.settings.rate*0.8)});
+ if(TU&&!TU.stopSpeak&&pc&&FREE&&cor.length){$('#bubbleText').innerHTML=`<b>${esc(pc.en)}</b>`;await tuSay(pick(['Dilo conmigo:','A ver, dilo tú:','Va, dilo conmigo:']),{lang:'es'});await tuSay(pc.en,{rate:Math.max(0.6,S.settings.rate*0.85)})}
+ else if(TU&&!TU.stopSpeak&&pc&&!FREE){$('#bubbleText').innerHTML=`🔁 <b>${esc(pc.en)}</b><div class="pr">${prHTML(pc.pr||'')}</div><div class="es">${esc(pc.es||'')}</div>`;await tuSay(say('repeat'),{lang:'es'});await tuSay(pc.en,{rate:Math.max(0.6,S.settings.rate*0.8)});
   if(!tuCallOn())await tuSay(pick(['Cuando quieras, toca el botón y dímelo.','Tu turno: toca el botón y repítela o contéstame.']),{lang:'es'})}
  stopB();if(!TU)return;TU.busy=false;if(TU.barge&&!TU.ctl){TU.barge=false;tuListen();return}tuAfterSpeak()}
 async function tuSpeakSegs(j){for(const x of tuSegs(j)){if(!TU||TU.stopSpeak)break;$('#bubbleText').innerHTML=x.lang==='es'?esc(x.text):`<b>${esc(x.text)}</b><div class="pr">${prHTML(x.pr||'')}</div><div class="es">${esc(x.es||'')}</div>`;await tuSay(x.text,{lang:x.lang==='es'?'es':'en'})}}
@@ -1738,8 +1801,8 @@ async function tuPronDrill(pa,text,targets,ptip){const T=S.settings.threshold||8
  await tuSay(verdict(pa.pa)+' '+(targets.length?pick(['Antes de contestarte, una cosita.','Déjame corregirte algo rapidito.','Mira, vamos a pulir una palabra.']):''),{lang:'es',force:true});
  for(const w0 of targets){if(stop())break;LOOP.skip=false;let w=w0,ok=false,tries=0;const d0=worstPh(w0);const lt=d0?letterOf(w0,d0):'';
   loopUI(box,`<div class="small mut">Paso 1 · El sonido</div>${exactTipHTML(w0)}`);
-  await tuSay(exactSay(w0),{lang:'es'});if(skip())continue;
-  if(d0&&lt&&AZ.cfg()){await tuSay(say('listen'),{lang:'es'});if(skip())continue;await tuSay(lt,{ph:d0.exp});await sleep(250);await tuSay(lt,{ph:d0.exp});await sleep(200);await tuSay(w0.w,{rate:0.75});if(skip())continue;
+  await tuSay(exactSay(w0,(W.length<=8?W:W.slice(Math.max(0,W.indexOf(w0)-3),W.indexOf(w0)+4)).map(x=>/^i$/i.test(x.w)?"I":x.w).join(" ")),{lang:'es'});if(skip())continue;
+  if(d0&&lt&&AZ.cfg()){await tuSay(say('listen'),{lang:'es'});if(skip())continue;await tuSay(lt,{ph:d0.exp});await sleep(250);await tuSay(lt,{ph:d0.exp});await new Promise(r=>setTimeout(r,200));await tuSay(w0.w,{rate:0.75});if(skip())continue;
    await tuSay(pick(['Hazlo tú, solo el sonido.','Ahora tú, solo ese sonido.']),{lang:'es'});tuState('sound');await sleep(1700);if(skip())continue}
   while(!skip()&&tries<maxW){loopUI(box,`<div class="small mut">Paso 2 · La palabra (${tries+1} de ${maxW})</div>${exactTipHTML(w)}${dMic('Decir "'+esc(w0.w)+'"')}`);
    await tuSay(tries?say('again'):pick(['Ahora la palabra completa.','Ahora toda la palabra.']),{lang:'es'});if(skip())break;await tuSay(w0.w,{rate:0.8});if(skip())break;await tuSay(say('you'),{lang:'es'});
@@ -1775,6 +1838,30 @@ async function tuMisDrill(cor){const T=S.settings.threshold||80,maxP=Math.min(3,
    await tuSay(say('almost')+(wk&&wk.acc<T?' '+exactSay(wk):'')+' '+say('again'),{lang:'es'})}
  }finally{LOOP=null;if(TU)TU.drilling=false}
  box.innerHTML=`<div class="small">${ok?'✅':'🔁'} ${esc(c.corrected)}</div>`;return true}
+/* ---------- Tutor libre: one light, precise correction (voice only, no buttons) ---------- */
+async function tuFreeFix(pa,text,w0){if(!w0)return null;const T=S.settings.threshold||80;const W=pa.words.filter(w=>w.err!=='Insertion'&&w.w);const i=W.indexOf(w0);
+ const nm=x=>/^i$/i.test(x.w)?'I':x.w;const phrase=(W.length<=8?W:W.slice(Math.max(0,i-3),i+4)).map(nm).join(' ');
+ const log=$('#tuLog');log.insertAdjacentHTML('beforeend','<div class="msg sam drill free"><div class="dbox"></div></div>');const box=log.lastElementChild.querySelector('.dbox');
+ const d=worstPh(w0);const lt=d?letterOf(w0,d):'';const tip=d&&ART[d.exp]?ART[d.exp]:'';
+ box.innerHTML=`<div class="en hlsent">${sentenceHL(W,T)}</div>${lt?`<div class="small">En <b>${esc(w0.w)}</b>: la <b class="lbad">${esc(lt)}</b>${d.heard&&SUBN[d.heard]?' · te salió como '+esc(SUBN[d.heard]):''}</div>`:''}${tip?`<div class="small">👄 ${esc(tip)}</div>`:''}<div class="small mut dres"></div>`;box.scrollIntoView({behavior:'smooth',block:'end'});
+ LOOP={};TU.drilling=true;let ok=false;const stop=()=>!LOOP||LOOP.stop||!TU;
+ try{await tuSay(exactLine(w0,phrase),{lang:'es',force:true});if(stop())return{any:true};
+  if(d&&lt&&AZ.cfg()){await tuSay(lt,{ph:d.exp});await new Promise(r=>setTimeout(r,200))}await tuSay(nm(w0),{rate:0.8});
+  for(let k=0;k<3&&!stop();k++){let r;try{r=await dListen(nm(w0),6000)}catch(e){micFail(e);break}if(stop())break;
+   if(r.error||!r.words.length){await tuSay(pick(['No te escuché, otra vez:','¿Mande? Otra vez:']),{lang:'es'});await tuSay(nm(w0),{rate:0.8});continue}
+   const ww=r.words.find(x=>x.err!=='Insertion')||r.words[0];if(!ww||ww.acc==null)continue;phStat([ww]);sessAdd({en:w0.w,es:'Palabra corregida en conversación'},ww.acc);
+   box.querySelector('.dres').innerHTML=`Tú: <span class="en">${wordHL(ww,T)}</span>`;
+   if(ww.acc>=T){ok=true;addXP(3);mood('happy');await tuSay(pick(['¡Eso!','¡Así mero!','¡Ahora sí!','¡Perfecto!']),{lang:'es'});break}
+   const d2=worstPh(ww);const sub=d2?substText(ww,d2):'';await tuSay((sub?pick(['Todavía','Aún'])+' '+sub+'. ':pick(['Casi.','Ya casi.'])+' ')+(d2&&ART[d2.exp]&&k===1?ART[d2.exp]+' ':'')+pick(['Otra vez:','Una más:']),{lang:'es'});await tuSay(nm(w0),{rate:0.8})}
+  if(ok&&!stop()&&phrase.split(' ').length>1){await tuSay(pick(['Ahora toda la frase:','Y ahora en la frase:']),{lang:'es'});await tuSay(phrase,{rate:0.9});
+   for(let k=0;k<2&&!stop();k++){let r;try{r=await dListen(phrase,9000)}catch(e){break}if(stop()||r.error||!r.words.length)break;recordPA({id:'c_'+hash(phrase),en:phrase,es:''},r,{noAutoSrs:true,quiet:true});
+    box.querySelector('.dres').innerHTML=`Tú: <span class="en">${sentenceHL(r.words,T)}</span>`;
+    if(paGood(r,T)){await tuSay(pick(['¡Sonó muy natural!','¡Eso, muy bien!','¡Qué bien sonó!']),{lang:'es'});break}
+    const wk=r.words.filter(x=>x.err!=='Insertion'&&x.acc!=null).sort((a,b)=>a.acc-b.acc)[0];if(k===0){await tuSay(wk&&wk.acc<T?`Casi. Cuida "${nm(wk)}". Otra vez:`:'Casi. Otra vez:',{lang:'es'});await tuSay(phrase,{rate:0.9})}else await tuSay('Va mejorando, lo seguimos practicando platicando.',{lang:'es'})}}
+  if(!ok&&!stop()){srsAdd({id:'w_'+w0.w.toLowerCase(),en:w0.w,pr:phRespell(w0.phon||[]),es:'Palabra difícil (pronunciación)',ipa:'/'+(w0.phon||[]).map(x=>x.p).join('')+'/'},true);await tuSay(pick(['No pasa nada, la seguimos practicando luego.','Tranqui, luego la repasamos.']),{lang:'es'})}
+ }finally{LOOP=null;if(TU)TU.drilling=false}return{any:true,ok}}
+async function tuFreeProsody(pt){if(!pt||!pt.chunk)return;LOOP={};TU.drilling=true;try{await tuSay(pt.say.replace(/Escúchame:$/,'Escucha:'),{lang:'es',force:true});await tuSay(pt.chunk,{mark:pt.mark,rate:0.9});await tuSay(pick(['Dilo conmigo.','A ver tú.']),{lang:'es'});
+ const r=await dListen(pt.chunk,9000);if(r&&!r.error&&r.words.length){const p2=prosodyTip(r,pt.chunk);await tuSay(!p2||p2.kind!==pt.kind?pick(['¡Mucho mejor, así suena natural!','¡Eso!']):pick(['Va mejorando.','Ya casi.']),{lang:'es'})}}catch(e){}finally{LOOP=null;if(TU)TU.drilling=false}}
 
 /* ================= LECCIÓN DEL DÍA (guided) + RESUMEN DE SESIÓN ================= */
 const PH2SOUND={'θ':'th','ð':'th','v':'v','z':'z','ʃ':'sh','tʃ':'sh','dʒ':'dy','h':'h','ɹ':'r','r':'r','ɝ':'r','ɚ':'r','ə':'schwa','i':'i','ɪ':'i','æ':'ae','ʊ':'u','u':'u','w':'w','s':'s'};
