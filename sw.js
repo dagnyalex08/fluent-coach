@@ -1,5 +1,5 @@
 /* Fluent Coach service worker: offline app shell. API calls (Azure, xAI, OpenAI) are never cached. */
-const CACHE='fluent-coach-v10-741e165b28';
+const CACHE='fluent-coach-v11-a073f59427';
 const SHELL=["./", "index.html", "manifest.webmanifest", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "vendor/speech-sdk.min.js"];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL.map(x=>new Request(x,{cache:'reload'})))))});
 self.addEventListener('message',e=>{if(e.data==='skipWaiting')self.skipWaiting()});
