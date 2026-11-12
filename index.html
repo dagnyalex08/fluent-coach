@@ -240,10 +240,15 @@ header.top{background:#fff;border-bottom:0;box-shadow:0 4px 0 var(--line);color:
   box-shadow:0 8px 0 #bae6fd,0 12px 24px rgba(14,165,233,.18);
   transform:translateZ(0);transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s}
 #avatar:active{transform:translateY(4px);box-shadow:0 4px 0 #bae6fd}
-#avatar canvas#sam3d{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;opacity:0;pointer-events:none;z-index:1}
-#avatar canvas#sam3d.on{opacity:1;transition:opacity .45s ease}
-#avatar svg#sam2d{position:relative;z-index:0;display:block}
-#avatar svg#sam2d.behind{position:absolute;inset:0;opacity:0;pointer-events:none}
+#avatar svg#sam2d{position:relative;z-index:0;display:block;width:100%;height:100%;overflow:visible;border-radius:50%}
+#avatar svg#sam2d .m-closed,#avatar svg#sam2d .m-half,#avatar svg#sam2d .m-open,#avatar svg#sam2d .m-happy{transition:opacity .09s ease}
+#avatar svg#sam2d .eye-open,#avatar svg#sam2d .eye-squint,#avatar svg#sam2d .eye-closed{transition:opacity .07s ease}
+/* cancel leftover v1 cartoon rules that would paint listening ears blue, blink via scale, or rotate brows from a 120-viewBox origin */
+#avatar .eye{animation:none!important;transform:none!important}
+#avatar.listening .ear{fill:unset}
+#avatar .ring{transform-origin:100px 100px;transform-box:view-box}
+#avatar.concern .brow.l{transform:rotate(11deg);transform-origin:center;transform-box:fill-box}
+#avatar.concern .brow.r{transform:rotate(-11deg);transform-origin:center;transform-box:fill-box}
 #avatar.listening{box-shadow:0 8px 0 #7dd3fc,0 0 0 6px rgba(28,176,246,.28),0 12px 28px rgba(14,165,233,.25)}
 #avatar.talking{box-shadow:0 8px 0 #86efac,0 0 0 6px rgba(88,204,2,.25)}
 #avatar.happy{box-shadow:0 8px 0 #fde047,0 0 0 6px rgba(255,200,0,.3)}
@@ -369,23 +374,259 @@ table td,table th{border-bottom:1px solid var(--line);color:var(--ink)}
 <div id="banner"></div>
 <section id="coachBar">
   <div id="avatar" title="Toca para que el coach te hable">
-   <canvas id="sam3d" width="180" height="180" aria-hidden="true"></canvas>
-   <svg id="sam2d" viewBox="0 0 120 120" width="100%" height="100%">
-    <circle class="ring" cx="60" cy="60" r="56" fill="none" stroke="#38bdf8" stroke-width="4"/>
-    <path d="M22 52 Q20 14 60 12 Q100 14 98 52 Q92 30 60 28 Q30 30 22 52Z" fill="#3b2a1a"/>
-    <ellipse cx="60" cy="62" rx="36" ry="40" fill="#e9b48a"/>
-    <path d="M24 50 Q26 22 60 22 Q94 22 96 50 Q86 34 60 34 Q34 34 24 50Z" fill="#4a3320"/>
-    <ellipse class="ear" cx="24" cy="64" rx="6" ry="9" fill="#d99c72"/>
-    <ellipse class="ear" cx="96" cy="64" rx="6" ry="9" fill="#d99c72"/>
-    <path class="brow l" d="M36 42 Q44 37 52 41" stroke="#3b2a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-    <path class="brow r" d="M68 41 Q76 37 84 42" stroke="#3b2a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-    <g class="eye"><ellipse cx="44" cy="55" rx="6" ry="7" fill="#fff"/><circle cx="45" cy="56" r="3.6" fill="#1e293b"/></g>
-    <g class="eye"><ellipse cx="76" cy="55" rx="6" ry="7" fill="#fff"/><circle cx="77" cy="56" r="3.6" fill="#1e293b"/></g>
-    <path d="M58 60 Q56 70 60 72" stroke="#c98a60" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-    <ellipse class="mouth" cx="60" cy="84" rx="11" ry="7" fill="#7f1d1d"/>
-    <path class="smile" d="M46 80 Q60 96 74 80" stroke="#7f1d1d" stroke-width="4" fill="#fff" stroke-linecap="round"/>
-    <rect x="16" y="56" width="6" height="18" rx="3" fill="#334155"/><path d="M19 74 Q22 92 44 92" stroke="#334155" stroke-width="3" fill="none"/><circle cx="46" cy="92" r="3" fill="#334155"/>
-   </svg>
+   <svg id="sam2d" viewBox="0 0 200 200" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sam, tu coach de inglés">
+  <defs>
+    <linearGradient id="sam-sk" x1="35%" y1="10%" x2="70%" y2="95%">
+      <stop offset="0%" stop-color="#F8D5BB"/>
+      <stop offset="45%" stop-color="#F0C2A0"/>
+      <stop offset="100%" stop-color="#E2AB84"/>
+    </linearGradient>
+    <linearGradient id="sam-skd" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#E8B594"/>
+      <stop offset="100%" stop-color="#D49A72"/>
+    </linearGradient>
+    <linearGradient id="sam-hr" x1="30%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#6B4A30"/>
+      <stop offset="40%" stop-color="#4A3120"/>
+      <stop offset="100%" stop-color="#2E1D12"/>
+    </linearGradient>
+    <linearGradient id="sam-hrh" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5E3C" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#8B5E3C" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="sam-bz" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#1A8A80"/>
+      <stop offset="100%" stop-color="#0F5E58"/>
+    </linearGradient>
+    <linearGradient id="sam-bz2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0C4F4A"/>
+      <stop offset="50%" stop-color="#15756C"/>
+      <stop offset="100%" stop-color="#0C4F4A"/>
+    </linearGradient>
+    <linearGradient id="sam-lip" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#E89A94"/>
+      <stop offset="55%" stop-color="#D4756E"/>
+      <stop offset="100%" stop-color="#C2645E"/>
+    </linearGradient>
+    <linearGradient id="sam-lip2" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#F0A8A0"/>
+      <stop offset="100%" stop-color="#D07068"/>
+    </linearGradient>
+    <radialGradient id="sam-blush" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E89B8C" stop-opacity=".42"/>
+      <stop offset="100%" stop-color="#E89B8C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="sam-iris" cx="38%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#A86B3C"/>
+      <stop offset="55%" stop-color="#6E4324"/>
+      <stop offset="100%" stop-color="#3E2514"/>
+    </radialGradient>
+    <clipPath id="sam-avclip"><circle cx="100" cy="100" r="100"/></clipPath>
+    <!-- almond eyes: outer corners slightly up (friendly), little white above the iris -->
+    <clipPath id="sam-eyeL"><path d="M64 98 C67 89, 73 86, 80 86.5 C87 87, 91.5 91, 93 97 C90 104.5, 80 106.5, 70 103 C66 101.5, 64 100, 64 98Z"/></clipPath>
+    <clipPath id="sam-eyeR"><path d="M107 97 C108.5 91, 113 87, 120 86.5 C127 86, 133 89, 136 98 C136 100, 134 101.5, 130 103 C120 106.5, 110 104.5, 107 97Z"/></clipPath>
+  </defs>
+
+  <g class="sam-root" clip-path="url(#sam-avclip)">
+    <!-- soft backdrop inside the circle -->
+    <circle cx="100" cy="100" r="100" fill="#E8F6F3"/>
+
+    <!-- ===== BLAZER + SHIRT (teacher) ===== -->
+    <g class="clothes">
+      <path d="M8 200 L16 158 Q48 142 78 154 L90 172 L100 162 L110 172 L122 154 Q152 142 184 158 L192 200 Z" fill="url(#sam-bz)"/>
+      <path d="M8 200 L16 158 Q30 150 48 152 L40 200 Z" fill="#0C534E" opacity=".35"/>
+      <path d="M192 200 L184 158 Q170 150 152 152 L160 200 Z" fill="#0C534E" opacity=".35"/>
+      <!-- shirt front (crisp white V) -->
+      <path d="M88 166 L100 200 L112 166 L100 157 Z" fill="#FFFEFB"/>
+      <path d="M99.5 168 L100 200 L100.5 168" stroke="#EDE8E0" stroke-width="1" fill="none"/>
+      <!-- collar: two clean pointed flaps -->
+      <path d="M76 150 L100 160 L92 176 L70 156 Z" fill="#FFFEFB" stroke="#E6E1D8" stroke-width=".8" stroke-linejoin="round"/>
+      <path d="M124 150 L100 160 L108 176 L130 156 Z" fill="#FFFEFB" stroke="#E6E1D8" stroke-width=".8" stroke-linejoin="round"/>
+      <path d="M80 154 L98 162 L92 174" fill="#F4F0E8" opacity=".55"/>
+      <path d="M120 154 L102 162 L108 174" fill="#EDE8E0" opacity=".55"/>
+      <!-- lapel left -->
+      <path d="M58 154 L86 168 L72 200 L22 200 L18 168 Q36 150 58 154 Z" fill="url(#sam-bz2)"/>
+      <path d="M58 154 L86 168 L78 200" fill="#0A4541" opacity=".25"/>
+      <!-- lapel right -->
+      <path d="M142 154 L114 168 L128 200 L178 200 L182 168 Q164 150 142 154 Z" fill="url(#sam-bz2)"/>
+      <path d="M142 154 L114 168 L122 200" fill="#0A4541" opacity=".22"/>
+    </g>
+
+    <!-- ===== NECK ===== -->
+    <path d="M80 140 Q100 152 120 140 L118 128 Q100 134 82 128 Z" fill="url(#sam-skd)"/>
+    <path d="M90 138 Q100 144 110 138" stroke="#D4A07A" stroke-width="1.2" fill="none" opacity=".45"/>
+
+    <!-- ===== EARS ===== -->
+    <g class="ear ear-l">
+      <ellipse cx="46" cy="106" rx="8.5" ry="14" fill="#E8B494"/>
+      <ellipse cx="47.5" cy="107" rx="4.5" ry="8" fill="#E09A80" opacity=".4"/>
+    </g>
+    <g class="ear ear-r">
+      <ellipse cx="154" cy="106" rx="8.5" ry="14" fill="#E8B494"/>
+      <ellipse cx="152.5" cy="107" rx="4.5" ry="8" fill="#E09A80" opacity=".4"/>
+    </g>
+
+    <!-- ===== HAIR (back, behind head sides) ===== -->
+    <path fill="url(#sam-hr)" d="M48 110 Q42 84 50 64 Q48 90 48 110Z"/>
+    <path fill="url(#sam-hr)" d="M152 110 Q158 84 150 64 Q152 90 152 110Z"/>
+
+    <!-- ===== HEAD ===== -->
+    <path fill="url(#sam-sk)" d="M48 100
+      C48 58 66 42 100 40
+      C134 42 152 58 152 100
+      C152 128 142 148 100 156
+      C58 148 48 128 48 100Z"/>
+    <!-- soft face shadow (left) -->
+    <path fill="#D4A07A" opacity=".16" d="M48 100 C48 70 58 52 78 46 C64 70 62 120 70 146 C56 136 48 120 48 100Z"/>
+    <!-- forehead highlight -->
+    <ellipse cx="92" cy="72" rx="28" ry="16" fill="#FFE8D2" opacity=".35"/>
+    <!-- chin shade -->
+    <ellipse cx="100" cy="148" rx="22" ry="8" fill="#D4A07A" opacity=".18"/>
+
+    <!-- ===== HAIR (neat short cut, side part on the left, open friendly forehead) ===== -->
+    <g class="hair">
+      <!-- main cap -->
+      <path fill="url(#sam-hr)" d="
+        M46 98
+        C44 78 46 60 58 48
+        C70 32 88 28 108 27
+        C132 26 152 36 156 56
+        C160 70 156 86 154 98
+        C152 86 150 70 140 60
+        C128 48 112 50 100 52
+        C84 54 70 58 60 70
+        C54 80 50 90 46 98Z"/>
+      <!-- tidy hairline, slightly rounded, no messy bangs -->
+      <path fill="url(#sam-hr)" d="
+        M58 70
+        C70 54 86 48 100 50
+        C118 52 132 50 144 62
+        C136 52 118 46 100 46
+        C80 46 66 54 58 70Z"/>
+      <!-- left taper by the part -->
+      <path fill="#3A2718" d="M50 72 C54 56 66 48 78 52 C68 58 58 68 52 86 C50 80 50 76 50 72Z" opacity=".55"/>
+      <!-- top highlight swoosh (groomed) -->
+      <path fill="url(#sam-hrh)" d="M90 36 C108 30 130 36 142 54 C130 42 112 36 96 40 C90 42 88 40 90 36Z"/>
+      <!-- one soft right strand, close to the head -->
+      <path d="M126 40 Q136 48 142 60" stroke="#5A3C26" stroke-width="2" fill="none" stroke-linecap="round" opacity=".45"/>
+    </g>
+
+    <!-- ===== BROWS — thin, relaxed, slightly lifted outward (friendly, never angry) ===== -->
+    <g class="brows">
+      <path class="brow l" d="M65 83 Q78 74 94 79" fill="none" stroke="#6A4A34" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round"/>
+      <path class="brow r" d="M106 79 Q122 73 135 83" fill="none" stroke="#6A4A34" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+
+    <!-- ===== EYES ===== -->
+    <!-- open (default) — almond, smiling lower lid, warm brown iris, clear highlight -->
+    <g class="eye-open" opacity="1">
+      <g class="eye eye-l">
+        <g clip-path="url(#sam-eyeL)">
+          <rect x="60" y="80" width="40" height="32" fill="#FFFEFB"/>
+          <circle cx="80" cy="96.8" r="8.8" fill="url(#sam-iris)"/>
+          <circle cx="80" cy="96.8" r="3.8" fill="#1A100C"/>
+          <circle cx="77.2" cy="93.8" r="2.3" fill="#fff"/>
+          <circle cx="82.6" cy="98.6" r="1" fill="#fff" opacity=".45"/>
+        </g>
+        <!-- upper lash, follows the almond -->
+        <path d="M64 98 C67 89, 73 86, 80 86.5 C87 87, 91.5 91, 93 97" fill="none" stroke="#3A271C" stroke-width="2.4" stroke-linecap="round"/>
+        <!-- soft lower lid crease (skin, not a white bag) -->
+        <path d="M66 102.5 C74 106.5, 86 106.5, 92 101" fill="none" stroke="#D4A07A" stroke-width="1.3" stroke-linecap="round" opacity=".55"/>
+      </g>
+      <g class="eye eye-r">
+        <g clip-path="url(#sam-eyeR)">
+          <rect x="100" y="80" width="40" height="32" fill="#FFFEFB"/>
+          <circle cx="120" cy="96.8" r="8.8" fill="url(#sam-iris)"/>
+          <circle cx="120" cy="96.8" r="3.8" fill="#1A100C"/>
+          <circle cx="117.2" cy="93.8" r="2.3" fill="#fff"/>
+          <circle cx="122.6" cy="98.6" r="1" fill="#fff" opacity=".45"/>
+        </g>
+        <path d="M107 97 C108.5 91, 113 87, 120 86.5 C127 86, 133 89, 136 98" fill="none" stroke="#3A271C" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M108 101 C114 106.5, 126 106.5, 134 102.5" fill="none" stroke="#D4A07A" stroke-width="1.3" stroke-linecap="round" opacity=".55"/>
+      </g>
+    </g>
+
+    <!-- happy squint (smiling eyes) -->
+    <g class="eye-squint" opacity="0">
+      <path d="M64 98 Q78 108 92 96" fill="none" stroke="#3F2A1C" stroke-width="2.8" stroke-linecap="round"/>
+      <path d="M64 98 Q78 90 92 96" fill="none" stroke="#3F2A1C" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M108 96 Q122 108 136 98" fill="none" stroke="#3F2A1C" stroke-width="2.8" stroke-linecap="round"/>
+      <path d="M108 96 Q122 90 136 98" fill="none" stroke="#3F2A1C" stroke-width="2.4" stroke-linecap="round"/>
+      <!-- happy creases -->
+      <path d="M60 104 Q66 108 72 106" fill="none" stroke="#E09A80" stroke-width="1.4" stroke-linecap="round" opacity=".7"/>
+      <path d="M140 104 Q134 108 128 106" fill="none" stroke="#E09A80" stroke-width="1.4" stroke-linecap="round" opacity=".7"/>
+    </g>
+
+    <!-- blink (closed lids, gentle curve) -->
+    <g class="eye-closed" opacity="0">
+      <path d="M64 98 Q78 104 92 98" fill="none" stroke="#3F2A1C" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M108 98 Q122 104 136 98" fill="none" stroke="#3F2A1C" stroke-width="2.6" stroke-linecap="round"/>
+    </g>
+
+    <!-- ===== NOSE — small, refined ===== -->
+    <g class="nose">
+      <path d="M100 108 Q98 118 95 123" fill="none" stroke="#C99270" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M95 122.5 Q100 125.5 105 122.5" fill="none" stroke="#C99270" stroke-width="1.9" stroke-linecap="round"/>
+      <ellipse cx="97" cy="123" rx="2.6" ry="1.7" fill="#D4A07A" opacity=".28"/>
+      <ellipse cx="103" cy="123" rx="2.6" ry="1.7" fill="#D4A07A" opacity=".28"/>
+    </g>
+
+    <!-- ===== BLUSH ===== -->
+    <ellipse cx="66" cy="118" rx="16" ry="10" fill="url(#sam-blush)"/>
+    <ellipse cx="134" cy="118" rx="16" ry="10" fill="url(#sam-blush)"/>
+
+    <!-- ===== MOUTH SHAPES ===== -->
+    <!-- CLOSED WARM SMILE — default. No dark hole. -->
+    <g class="m-closed" opacity="1">
+      <!-- lower lip -->
+      <path d="M78 128 C90 141, 110 141, 122 128 C110 136, 90 136, 78 128Z" fill="url(#sam-lip2)"/>
+      <!-- upper lip, cupid's bow, corners clearly UP -->
+      <path d="M78 128 C90 123, 95 126, 100 128.5 C105 126, 110 123, 122 128 C112 132, 88 132, 78 128Z" fill="url(#sam-lip)"/>
+      <path d="M90 133 C96 136.5, 104 136.5, 110 133" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity=".35"/>
+      <path d="M77 126 Q70 121 69 114" fill="none" stroke="#E09A80" stroke-width="1.5" stroke-linecap="round" opacity=".5"/>
+      <path d="M123 126 Q130 121 131 114" fill="none" stroke="#E09A80" stroke-width="1.5" stroke-linecap="round" opacity=".5"/>
+    </g>
+
+    <!-- HALF OPEN — talking, still smiling, upper teeth, no cave -->
+    <g class="m-half" opacity="0">
+      <path d="M80 128 C90 124, 110 124, 120 128 C122 132, 118 140, 100 142 C82 140, 78 132, 80 128Z" fill="url(#sam-lip)"/>
+      <!-- opening -->
+      <path d="M86 130 C94 128, 106 128, 114 130 C114 134, 108 136, 100 136.5 C92 136, 86 134, 86 130Z" fill="#7A3432"/>
+      <!-- teeth -->
+      <path d="M88 130 C95 128.5, 105 128.5, 112 130 C110 133, 90 133, 88 130Z" fill="#FFFEFB"/>
+      <path d="M94 129.5 L94 132.5 M100 129 L100 133 M106 129.5 L106 132.5" stroke="#E8E0DC" stroke-width=".6" opacity=".7"/>
+      <path d="M78 126 Q72 123 70 118" fill="none" stroke="#E09A80" stroke-width="1.5" stroke-linecap="round" opacity=".45"/>
+      <path d="M122 126 Q128 123 130 118" fill="none" stroke="#E09A80" stroke-width="1.5" stroke-linecap="round" opacity=".45"/>
+    </g>
+
+    <!-- OPEN — talking more, still friendly, teeth + warm interior + tongue, corners slightly up -->
+    <g class="m-open" opacity="0">
+      <path d="M80 126 C92 120, 108 120, 120 126 C124 132, 118 148, 100 150 C82 148, 76 132, 80 126Z" fill="url(#sam-lip)"/>
+      <path d="M86 128 C96 124, 104 124, 114 128 C116 136, 110 144, 100 145 C90 144, 84 136, 86 128Z" fill="#8A3C3A"/>
+      <!-- upper teeth -->
+      <path d="M88 128 C96 125, 104 125, 112 128 C111 133, 89 133, 88 128Z" fill="#FFFEFB"/>
+      <path d="M94 126.5 L94 132 M100 126 L100 132.5 M106 126.5 L106 132" stroke="#E8E0DC" stroke-width=".65" opacity=".75"/>
+      <!-- tongue -->
+      <ellipse cx="100" cy="141" rx="10" ry="5.5" fill="#E07A78"/>
+      <ellipse cx="100" cy="140" rx="5" ry="2" fill="#F09894" opacity=".5"/>
+    </g>
+
+    <!-- HAPPY GRIN — wide warm smile, upper teeth, eyes handled separately -->
+    <g class="m-happy" opacity="0">
+      <path d="M72 128 C88 144, 112 144, 128 128 C116 138, 84 138, 72 128Z" fill="url(#sam-lip2)"/>
+      <path d="M72 128 C86 122, 114 122, 128 128 C118 132, 82 132, 72 128Z" fill="url(#sam-lip)"/>
+      <!-- teeth in a gentle arc -->
+      <path d="M80 128 C92 125, 108 125, 120 128 C116 133, 84 133, 80 128Z" fill="#FFFEFB"/>
+      <path d="M88 126.5 L88 132 M96 126 L96 132.5 M104 126 L104 132.5 M112 126.5 L112 132" stroke="#E8E0DC" stroke-width=".6" opacity=".7"/>
+      <path d="M90 134 C96 136, 104 136, 110 134" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".35"/>
+      <path d="M72 126 Q64 120 62 112" fill="none" stroke="#E09A80" stroke-width="1.6" stroke-linecap="round" opacity=".5"/>
+      <path d="M128 126 Q136 120 138 112" fill="none" stroke="#E09A80" stroke-width="1.6" stroke-linecap="round" opacity=".5"/>
+    </g>
+
+    <!-- listening glow ring (SVG, extra to the CSS ring) -->
+    <circle class="ring" cx="100" cy="100" r="96" fill="none" stroke="#1CB0F6" stroke-width="6" opacity="0"/>
+  </g>
+</svg>
   </div>
   <div id="bubble"><div id="bubbleText">¡Hola! Soy <b>Sam</b>, tu coach de inglés. Toca mi cara para que me presente.</div><div id="liveHeard"></div></div>
 </section>
@@ -480,7 +721,7 @@ function micFail(e){const n=e&&(e.name||e.message)||String(e);
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const APP_VERSION='v12';
+const APP_VERSION='v13';
 /* on-device debug log (ring buffer, survives reloads) — Ajustes › Diagnóstico de voz */
 const DBGL=(()=>{try{const o=JSON.parse(localStorage.getItem('fc_dbg')||'[]');return Array.isArray(o)?o.slice(-200):[]}catch(e){return[]}})();let _dbgT=null;
 function DBG(ev,x){try{const L=DBGL[DBGL.length-1],xs=x==null?'':String(typeof x==='object'?JSON.stringify(x):x).slice(0,180);if(L&&L[1]===ev&&(L[2]===xs||L[3])&&Date.now()-L[0]<60000){L[3]=(L[3]||1)+1;return}DBGL.push([Date.now(),ev,x==null?'':String(typeof x==='object'?JSON.stringify(x):x).slice(0,180)]);if(DBGL.length>300)DBGL.splice(0,DBGL.length-300);if(!_dbgT)_dbgT=setTimeout(()=>{_dbgT=null;try{localStorage.setItem('fc_dbg',JSON.stringify(DBGL.slice(-200)))}catch(e){}},1500)}catch(e){}}
@@ -954,166 +1195,78 @@ async function playBuffer0(buf){stopAudio();DBG('play',(buf.duration||0).toFixed
   else if(restarts<2){restarts++;start()}};
  c.addEventListener&&c.addEventListener('statechange',onState);start()})}
 
-/* ================= SAM 3D: lightweight procedural WebGL head =================
-   Lazy, never blocks a turn. Mouth follows TTS amplitude (setMouth / analyser).
-   Listening: leans in and nods with mic level. Happy/concern from mood().
-   If WebGL is missing, the context is lost, or frames stay slow, we keep the 2D SVG. */
-const SAM3D={ok:false,ready:false,amp:0,mood:'',nod:0,nodV:0,lvl:0,why:'',_t0:0};window.SAM3D=SAM3D;
+/* ================= SAM 2D: hand-drawn SVG teacher, animated, no WebGL =================
+   Mouth follows TTS amplitude (closed / half / open, smooth). Natural blink.
+   Listening: lean + glow, nods with mic level. Happy grin on a good score.
+   Gentle idle breath. Respects prefers-reduced-motion. Never blocks a turn. */
+const SAM={ok:false,ready:false,amp:0,ampT:0,drawnOpen:0,mood:'',nod:0,nodV:0,lvl:0,why:'svg'};
+window.SAM=SAM;window.SAM3D=SAM; /* tests / older hooks */
 (function(){
- const prefersReduce=()=>window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
- const forceOff=()=>/[?&]no3d=1/.test(location.search)||(typeof localStorage!=='undefined'&&localStorage.getItem('fc_no3d'));
- function fallback(why){if(SAM3D.dead)return;SAM3D.dead=true;SAM3D.ok=false;SAM3D.why=why||'off';SAM3D.stop&&SAM3D.stop();
-  const c=document.getElementById('sam3d'),s=document.getElementById('sam2d');if(c){c.classList.remove('on');c.style.display='none';c.style.opacity='0'}if(s){s.classList.remove('behind');s.style.display='';s.style.opacity='1';s.style.position='';}
-  DBG('sam3d-fallback',why);try{SAM3D.gl&&SAM3D.gl.getExtension('WEBGL_lose_context')&&SAM3D.gl.getExtension('WEBGL_lose_context').loseContext()}catch(e){}}
- SAM3D.fallback=fallback;
- function start(){try{if(forceOff())return fallback('forced');boot()}catch(e){fallback(e&&e.message||'boot')}}
- function later(fn){setTimeout(fn,500)} /* setTimeout, not requestIdleCallback: headless and busy iPhones may never go 'idle' */
- if(document.readyState==='complete')later(start);else window.addEventListener('load',()=>later(start));
-
+ const reduce=()=>window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+ const $av=()=>document.getElementById('avatar');
+ const $svg=()=>document.getElementById('sam2d');
+ function op(sel,v){const r=$svg();if(!r)return;r.querySelectorAll(sel).forEach(e=>{e.style.opacity=String(v);e.setAttribute('opacity',String(v))})}
  function boot(){
-  const host=document.getElementById('avatar');if(!host)return fallback('no-host');
-  let canvas=document.getElementById('sam3d');if(!canvas){canvas=document.createElement('canvas');canvas.id='sam3d';canvas.setAttribute('aria-hidden','true');host.insertBefore(canvas,host.firstChild)}
-  const gl=canvas.getContext('webgl',{alpha:true,antialias:true,depth:true,premultipliedAlpha:true,powerPreference:'low-power',failIfMajorPerformanceCaveat:false});
-  if(!gl)return fallback('no-webgl');
-  SAM3D.gl=gl;SAM3D.canvas=canvas;
-  canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();fallback('lost')});
-  const vs=gl.createShader(gl.VERTEX_SHADER);gl.shaderSource(vs,`attribute vec3 aP,aN;uniform mat4 uMVP;uniform mat3 uN;varying vec3 vN,vP;void main(){vN=uN*aN;vP=aP;gl_Position=uMVP*vec4(aP,1.0);}`);gl.compileShader(vs);
-  if(!gl.getShaderParameter(vs,gl.COMPILE_STATUS))return fallback('vs');
-  const fs=gl.createShader(gl.FRAGMENT_SHADER);gl.shaderSource(fs,`precision mediump float;varying vec3 vN,vP;uniform vec3 uC,uL;uniform float uG,uEm;void main(){vec3 n=normalize(vN);float d=max(dot(n,normalize(uL)),0.0);float wrap=d*.55+.45;float rim=pow(1.0-max(dot(n,vec3(0.,.2,1.)),0.),2.0)*.18;float sp=pow(max(dot(reflect(-normalize(uL),n),vec3(0.,.15,1.)),0.),uG)*(.22+uEm);vec3 col=uC*(wrap+uEm)+vec3(1.,.98,.9)*sp+uC*rim;gl_FragColor=vec4(col,1.0);}`);gl.compileShader(fs);
-  if(!gl.getShaderParameter(fs,gl.COMPILE_STATUS))return fallback('fs');
-  const pr=gl.createProgram();gl.attachShader(pr,vs);gl.attachShader(pr,fs);gl.linkProgram(pr);
-  if(!gl.getProgramParameter(pr,gl.LINK_STATUS))return fallback('link');
-  gl.useProgram(pr);
-  const aP=gl.getAttribLocation(pr,'aP'),aN=gl.getAttribLocation(pr,'aN');
-  const uMVP=gl.getUniformLocation(pr,'uMVP'),uN=gl.getUniformLocation(pr,'uN'),uC=gl.getUniformLocation(pr,'uC'),uL=gl.getUniformLocation(pr,'uL'),uG=gl.getUniformLocation(pr,'uG'),uEm=gl.getUniformLocation(pr,'uEm');
-  gl.enableVertexAttribArray(aP);gl.enableVertexAttribArray(aN);
-  gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.clearColor(0,0,0,0);
-
-  function mesh(pos,nrm,idx){const v=new Float32Array(pos.length*2);for(let i=0;i<pos.length;i+=3){v[i*2]=pos[i];v[i*2+1]=pos[i+1];v[i*2+2]=pos[i+2];v[i*2+3]=nrm[i];v[i*2+4]=nrm[i+1];v[i*2+5]=nrm[i+2]}
-   const vbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,v,gl.STATIC_DRAW);
-   const ibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);
-   return{vbo,ibo,n:idx.length}}
-  function sphere(lat,lon){const p=[],n=[],ix=[];for(let y=0;y<=lat;y++){const v=y/lat,ph=v*Math.PI,sy=Math.cos(ph),r=Math.sin(ph);for(let x=0;x<=lon;x++){const u=x/lon,th=u*Math.PI*2,px=r*Math.cos(th),pz=r*Math.sin(th);p.push(px,sy,pz);n.push(px,sy,pz)}}
-   for(let y=0;y<lat;y++)for(let x=0;x<lon;x++){const a=y*(lon+1)+x,b=a+lon+1;ix.push(a,b,a+1,a+1,b,b+1)}return mesh(p,n,ix)}
-  function box(){const F=[[-1,-1,1,1,-1,1,1,1,1,-1,1,1,0,0,1],[1,-1,1,1,-1,-1,1,1,-1,1,1,1,1,0,0],[1,-1,-1,-1,-1,-1,-1,1,-1,1,1,-1,0,0,-1],[-1,-1,-1,-1,-1,1,-1,1,1,-1,1,-1,-1,0,0],[-1,1,1,1,1,1,1,1,-1,-1,1,-1,0,1,0],[-1,-1,-1,1,-1,-1,1,-1,1,-1,-1,1,0,-1,0]];
-   const p=[],n=[],ix=[];F.forEach((f,fi)=>{const b=p.length/3;for(let i=0;i<4;i++){p.push(f[i*3]*.5,f[i*3+1]*.5,f[i*3+2]*.5);n.push(f[12],f[13],f[14])}ix.push(b,b+1,b+2,b,b+2,b+3)});return mesh(p,n,ix)}
-  const SPH=sphere(14,20),BOX=box();
-
-  const I=()=>new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
-  function mul(a,b){const o=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o}
-  function T(m,x,y,z){const t=I();t[12]=x;t[13]=y;t[14]=z;return mul(m,t)}
-  function S(m,x,y,z){const t=I();t[0]=x;t[5]=y;t[10]=z;return mul(m,t)}
-  function RX(m,a){const c=Math.cos(a),s=Math.sin(a),t=I();t[5]=c;t[6]=s;t[9]=-s;t[10]=c;return mul(m,t)}
-  function RY(m,a){const c=Math.cos(a),s=Math.sin(a),t=I();t[0]=c;t[2]=-s;t[8]=s;t[10]=c;return mul(m,t)}
-  function RZ(m,a){const c=Math.cos(a),s=Math.sin(a),t=I();t[0]=c;t[1]=s;t[4]=-s;t[5]=c;return mul(m,t)}
-  function nmat(m){const a=m[0],b=m[1],c=m[2],d=m[4],e=m[5],f=m[6],g=m[8],h=m[9],i=m[10];
-   const A=e*i-f*h,B=f*g-d*i,C=d*h-e*g,det=a*A+b*B+c*C||1;
-   return new Float32Array([A/det,(c*h-b*i)/det,(b*f-c*e)/det,B/det,(a*i-c*g)/det,(c*d-a*f)/det,C/det,(b*g-a*h)/det,(a*e-b*d)/det])}
-  function persp(fov,asp,n,f){const k=1/Math.tan(fov/2),o=I();o[0]=k/asp;o[5]=k;o[10]=(f+n)/(n-f);o[11]=-1;o[14]=(2*f*n)/(n-f);o[15]=0;return o}
-
-  function draw(geo,M,col,gloss,em){gl.bindBuffer(gl.ARRAY_BUFFER,geo.vbo);gl.vertexAttribPointer(aP,3,gl.FLOAT,false,24,0);gl.vertexAttribPointer(aN,3,gl.FLOAT,false,24,12);
-   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,geo.ibo);gl.uniformMatrix4fv(uMVP,false,mul(VP,M));gl.uniformMatrix3fv(uN,false,nmat(M));
-   gl.uniform3f(uC,col[0],col[1],col[2]);gl.uniform1f(uG,gloss||24);gl.uniform1f(uEm,em||0);gl.drawElements(gl.TRIANGLES,geo.n,gl.UNSIGNED_SHORT,0)}
-  function X(parent,x,y,z,sx,sy,sz,rx,ry,rz){let m=parent||I();m=T(m,x,y,z);if(ry)m=RY(m,ry);if(rx)m=RX(m,rx);if(rz)m=RZ(m,rz);return S(m,sx,sy,sz)}
-
-  const SKIN=[.94,.75,.58],SKIN2=[.86,.64,.48],HAIR=[.23,.16,.1],WHITE=[.98,.98,.99],IRIS=[.15,.38,.55],PUPIL=[.07,.08,.1],
-        LIP=[.72,.22,.25],SHIRT=[.13,.72,.18],HP=[.11,.69,.96],HP2=[.07,.42,.68],BROW=[.23,.16,.1],TOOTH=[.97,.95,.9];
-  let VP=I(),W=0,H=0,raf=0,running=false,slowN=0,ftSum=0,ftN=0,shown=false,blink=0,nextBlink=2.4,lookX=0,lookY=0,happyT=0,concernT=0;
-  const t0=performance.now();SAM3D._t0=t0;
-
-  function resize(){const r=Math.min(2,window.devicePixelRatio||1),w=Math.max(64,host.clientWidth|0),h=Math.max(64,host.clientHeight|0);
-   if(w===W&&h===H&&canvas.width===((w*r)|0))return;W=w;H=h;canvas.width=(w*r)|0;canvas.height=(h*r)|0;canvas.style.width=w+'px';canvas.style.height=h+'px';gl.viewport(0,0,canvas.width,canvas.height);
-   const P=persp(32*Math.PI/180,w/h,.4,12),V=T(I(),0,-.12,-3.55);VP=mul(P,V)}
-
-  function frame(now){if(SAM3D.dead)return;raf=requestAnimationFrame(frame);
-   const hidden=document.visibilityState==='hidden'||(host.offsetParent===null&&!host.getClientRects().length);
-   if(hidden){running=false;return}running=true;
-   const dt=Math.min(.05,(now-(frame.prev||now))/1000);frame.prev=now;const t=(now-t0)/1000;
-   ftSum+=dt;ftN++;if(ftN===90){const avg=ftSum/ftN;if(avg>0.055){slowN++;ftSum=0;ftN=0;if(slowN>=2)return fallback('slow '+Math.round(avg*1000)+'ms')}else{slowN=0;ftSum=0;ftN=0}}
-   resize();
-   const av=host;const talking=av.classList.contains('talking')||av.classList.contains('lipsync');
-   const listening=av.classList.contains('listening');
-   if(av.classList.contains('happy'))happyT=1;if(av.classList.contains('concern'))concernT=1;
-   happyT*=1-dt*1.1;concernT*=1-dt*1.1;
-   /* spring the mouth toward the latest amplitude (setMouth / analyser) */
-   SAM3D.amp+=(Math.max(0,Math.min(1,SAM3D.ampT==null?SAM3D.amp:SAM3D.ampT))-SAM3D.amp)*Math.min(1,dt*18);
-   const amp=talking?SAM3D.amp:SAM3D.amp*0.15;
-   /* mic-driven nod and look while listening */
+  const av=$av(),svg=$svg();if(!av||!svg){DBG('sam-missing');return}
+  const root=svg.querySelector('.sam-root')||svg;
+  SAM.ok=true;SAM.ready=true;DBG('sam-on','svg2d');
+  /* default mouth */
+  op('.m-closed',1);op('.m-half',0);op('.m-open',0);op('.m-happy',0);
+  op('.eye-open',1);op('.eye-squint',0);op('.eye-closed',0);
+  let raf=0,running=false,t0=performance.now(),nextBlink=t0+2400+Math.random()*2600,blinkUntil=0;
+  function frame(now){if(SAM.dead)return;raf=requestAnimationFrame(frame);
+   if(document.visibilityState==='hidden'){running=false;return}running=true;
+   const dt=Math.min(.05,(now-(frame.prev||now))/1000);frame.prev=now;
+   const red=reduce(),talking=av.classList.contains('talking')||av.classList.contains('lipsync');
+   const listening=av.classList.contains('listening'),happy=av.classList.contains('happy'),concern=av.classList.contains('concern');
+   /* spring the mouth toward the latest amplitude */
+   const tgt=Math.max(0,Math.min(1,SAM.ampT==null?SAM.amp:SAM.ampT));
+   SAM.amp+=(tgt-SAM.amp)*Math.min(1,dt*(talking?16:10));
+   const amp=talking?SAM.amp:SAM.amp*0.08;SAM.drawnOpen=amp;
+   /* mouth shapes: closed at rest, half, open; happy grin when celebrating and not mid-word */
+   let c=0,h=0,o=0,hp=0;
+   if(happy&&amp<0.18){hp=1}
+   else if(amp<0.10){c=1}
+   else if(amp<0.48){const t=(amp-0.10)/0.38;c=1-t;h=t}
+   else{const t=Math.min(1,(amp-0.48)/0.38);h=1-t;o=t}
+   op('.m-closed',c);op('.m-half',h);op('.m-open',o);op('.m-happy',hp);
+   /* blink: natural random interval; skip the cycle if reduced-motion */
+   if(!red){
+    if(now>=nextBlink&&!blinkUntil){blinkUntil=now+130;nextBlink=now+2800+Math.random()*3400}
+    const blinking=blinkUntil&&now<blinkUntil;
+    if(blinkUntil&&now>=blinkUntil)blinkUntil=0;
+    if(!happy){op('.eye-open',blinking?0:1);op('.eye-closed',blinking?1:0);op('.eye-squint',0)}
+    else{op('.eye-open',0);op('.eye-closed',0);op('.eye-squint',1)}
+   }else if(happy){op('.eye-open',0);op('.eye-squint',1);op('.eye-closed',0)}
+   else{op('.eye-open',1);op('.eye-squint',0);op('.eye-closed',0)}
+   /* mic-driven nod while listening */
    let lvl=0;try{if(listening&&typeof MIC!=='undefined')lvl=MIC.level||0}catch(e){}
-   SAM3D.lvl+=(lvl-SAM3D.lvl)*Math.min(1,dt*10);
-   if(listening&&lvl>0.06){SAM3D.nodV-=lvl*8}SAM3D.nodV+=(-SAM3D.nod-SAM3D.nodV*6)*dt*10;SAM3D.nod+=SAM3D.nodV*dt;
-   SAM3D.nod=Math.max(-0.35,Math.min(.2,SAM3D.nod));
-   const red=prefersReduce();
-   const sway=red?0:Math.sin(t*.8)*.1,breath=red?1:1+Math.sin(t*1.7)*.015,bob=talking?(red?0:Math.sin(t*11)*amp*.04):0;
-   lookX+=( ((listening?SAM3D.lvl*.4:0)+Math.sin(t*.5)*.05) -lookX)*dt*3;
-   lookY+=( ((listening?.06:0)+Math.sin(t*.4)*.03) -lookY)*dt*3;
-   blink-=dt;if(blink<=0){nextBlink=2.2+Math.random()*3;blink=nextBlink}const blinking=(!red&&blink>nextBlink-0.12)?Math.max(0.08,1-Math.sin((nextBlink-blink)/.12*Math.PI)*0.92):1;
-
-   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-   gl.uniform3f(uL,.55,.85,1.15);
-   const root=X(I(),0,red?0:Math.sin(t*1.7)*.015,0,1,breath,1, (listening?0.1:0)+SAM3D.nod+bob+(red?0:Math.sin(t*.55)*.03), sway+(listening?-0.1:0), listening?0.05:0);
-   /* shoulders + green shirt (clipped by the circle, just a hint) */
-   draw(SPH,X(root,0,-1.45,.1,1.7,.5,1.1, .55,0,0),SHIRT,18,listening?.08:0);
-   /* neck */
-   draw(SPH,X(root,0,-.95,.06,.28,.38,.28),SKIN2,30,0);
-   /* head */
-   draw(SPH,X(root,0,.02,0,1.02,1.12,1.0),SKIN,36,0);
-   /* hair: one clean cap + back, no bangs (bangs turn into mud at 90px) */
-   draw(SPH,X(root,0,.58,-.18,1.16,.82,1.14, -.55,0,0),HAIR,10,0);
-   draw(SPH,X(root,-.85,.15,-.4,.38,.55,.48),HAIR,10,0);
-   draw(SPH,X(root, .85,.15,-.4,.38,.55,.48),HAIR,10,0);
-   draw(SPH,X(root,0,.15,-.95,1.02,.58,.4, .2,0,0),HAIR,10,0);
-   /* ears (glow a little when listening) */
-   const earC=listening?[SKIN[0]*.9,SKIN[1]*.95,Math.min(1,SKIN[2]+.25)]:SKIN2;
-   draw(SPH,X(root,-1.05,.0,.05,.18,.3,.2),earC,20,listening?.2:0);
-   draw(SPH,X(root, 1.05,.0,.05,.18,.3,.2),earC,20,listening?.2:0);
-   /* brows */
-   const bA=concernT*.4,bY=.46-concernT*.05+happyT*.02;
-   draw(SPH,X(root,-.38,bY,.86,.28,.06,.1,0,0,-.1+bA),BROW,8,0);
-   draw(SPH,X(root, .38,bY,.86,.28,.06,.1,0,0,.1-bA),BROW,8,0);
-   /* big cartoon eyes */
-   const eY=.18,eZ=.92;draw(SPH,X(root,-.36,eY,eZ,.26,.28*blinking,.14),WHITE,50,.08);
-   draw(SPH,X(root, .36,eY,eZ,.26,.28*blinking,.14),WHITE,50,.08);
-   const px=lookX*.06,py=lookY*.05-concernT*.02;
-   draw(SPH,X(root,-.36+px,eY+py,eZ+.08,.13,.15*blinking,.09),IRIS,60,.1);
-   draw(SPH,X(root, .36+px,eY+py,eZ+.08,.13,.15*blinking,.09),IRIS,60,.1);
-   draw(SPH,X(root,-.36+px,eY+py,eZ+.13,.07,.08*blinking,.05),PUPIL,8,0);
-   draw(SPH,X(root, .36+px,eY+py,eZ+.13,.07,.08*blinking,.05),PUPIL,8,0);
-   draw(SPH,X(root,-.30,eY+.08,eZ+.16,.045,.045,.035),WHITE,8,.55);
-   draw(SPH,X(root, .42,eY+.08,eZ+.16,.045,.045,.035),WHITE,8,.55);
-   /* nose */
-   draw(SPH,X(root,0,-.02,1.08,.12,.15,.18, .25,0,0),SKIN2,30,0);
-   /* mouth: thin at rest, opens with amplitude, smiles when happy. Default slight smile so he looks friendly. */
-   const smile=.28+happyT*.55,open=.055+Math.min(1,amp)*.22,mw=.36+smile*.16+Math.min(1,amp)*.06,mz=1.05,my=-.42+smile*.05-concernT*.04;SAM3D.drawnOpen=open;SAM3D.drawnAmp=amp;
-   draw(SPH,X(root,0,my,mz,mw,open,.14, .15,0,0),LIP,22,talking?.1:0);
-   if(amp>0.2)draw(SPH,X(root,0,my+.015,mz+.03,mw*.7,Math.max(.04,open*.4),.07),TOOTH,50,.15);
-   /* cheeks when happy */
-   if(happyT>0.45){draw(SPH,X(root,-.55,-.22,.92,.13,.1,.08),[1,.68,.6],12,happyT*.15);draw(SPH,X(root,.55,-.22,.92,.13,.1,.08),[1,.68,.6],12,happyT*.15)}
-   /* headphones — big and readable at 90px */
-   draw(SPH,X(root,-1.15,.12,.35,.24,.4,.36),HP,30,listening?.3:0);
-   draw(SPH,X(root, 1.15,.12,.35,.24,.4,.36),HP,30,listening?.3:0);
-   draw(SPH,X(root,-1.05,.12,.42,.14,.28,.26),HP2,20,0);
-   draw(SPH,X(root, 1.05,.12,.42,.14,.28,.26),HP2,20,0);
-   draw(SPH,X(root,0,1.02,.1,1.18,.16,.95, -.15,0,0),HP,22,listening?.18:0);/* headband */
-   /* mic boom along the cheek, ending to the SIDE of the mouth, not over it */
-   draw(BOX,X(root,-.95,-.2,.35,.07,.07,.85, .55,.85,0),HP2,20,0);
-   draw(SPH,X(root,-.55,-.52,.85,.11,.11,.11),HP,30,listening?.25:0);
-
-   if(!shown){shown=true;SAM3D.ok=true;SAM3D.ready=true;canvas.classList.add('on');const s=document.getElementById('sam2d');if(s)s.classList.add('behind');DBG('sam3d-on','webgl')}
+   SAM.lvl+=(lvl-SAM.lvl)*Math.min(1,dt*10);
+   if(listening&&lvl>0.06)SAM.nodV-=lvl*7;
+   SAM.nodV+=(-SAM.nod-SAM.nodV*5.5)*dt*10;SAM.nod+=SAM.nodV*dt;
+   SAM.nod=Math.max(-0.28,Math.min(0.16,SAM.nod));
+   const lean=listening?-6.5:0, nodDeg=(SAM.nod*28), breath=red?0:Math.sin((now-t0)/3200*Math.PI*2)*1.4;
+   const sc=red?1:1+Math.sin((now-t0)/3200*Math.PI*2)*0.007;
+   const bob=(!red&&talking)?Math.sin((now-t0)/90)*amp*0.6:0;
+   root.setAttribute('transform','translate(0,'+(breath+bob).toFixed(2)+') rotate('+(lean+nodDeg).toFixed(2)+' 100 110) scale(1 '+sc.toFixed(4)+')');
+   const ring=svg.querySelector('.ring');if(ring)ring.setAttribute('opacity',listening?String(0.55+SAM.lvl*0.4):'0');
   }
-  function loop(){if(SAM3D.dead||running)return;running=true;raf=requestAnimationFrame(frame)}
-  SAM3D.stop=()=>{SAM3D.dead=true;cancelAnimationFrame(raf);running=false};
-  SAM3D.setMood=m=>{if(m==='happy')happyT=1;if(m==='concern')concernT=1;SAM3D.mood=m||''};
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!SAM3D.dead)loop()});
+  function loop(){if(SAM.dead||running)return;running=true;raf=requestAnimationFrame(frame)}
+  SAM.stop=()=>{SAM.dead=true;cancelAnimationFrame(raf);running=false};
+  SAM.setMood=m=>{SAM.mood=m||''};
+  SAM.setAmp=v=>{SAM.ampT=Math.max(0,Math.min(1,+v||0))};
+  SAM.fallback=why=>{SAM.why=why||'svg';DBG('sam-fallback',why)}; /* already 2D; nothing to drop */
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!SAM.dead)loop()});
   loop();
  }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,0));
+ else setTimeout(boot,0);
 })();
-/* hooks: wrap existing helpers so every caller drives the 3D head too. Never throws. */
 (function(){const sm=typeof setMouth==='function'?setMouth:function(){};
- setMouth=function(v){try{sm(v)}catch(e){}SAM3D.ampT=Math.max(0,Math.min(1,+v||0))};
+ setMouth=function(v){try{sm(v)}catch(e){}if(window.SAM)SAM.ampT=Math.max(0,Math.min(1,+v||0))};
  const md=typeof mood==='function'?mood:function(){};
- mood=function(m){try{md(m)}catch(e){}try{SAM3D.setMood&&SAM3D.setMood(m)}catch(e){}};
- document.addEventListener('samaudio',e=>{if(!e.detail)SAM3D.ampT=0});
+ mood=function(m){try{md(m)}catch(e){}try{SAM.setMood&&SAM.setMood(m)}catch(e){}};
+ document.addEventListener('samaudio',e=>{if(!e.detail&&window.SAM)SAM.ampT=0});
 })();
 
 /* ================= PRONUNCIATION ASSESSMENT UI + "repetir hasta que suene bien" ================= */
