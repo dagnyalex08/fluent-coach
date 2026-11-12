@@ -694,25 +694,48 @@ const AUD={ctx:null,unlocked:false,ready:false,gate:null,micErr:null,
 document.addEventListener('click',e=>{if(!AUD.ready&&e.target&&e.target.closest&&e.target.closest('button,.c3,#avatar,[data-prime]'))AUD.prime()},{capture:true});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&AUD.ctx&&AUD.ctx.state!=='running'){try{ctxResume(AUD.ctx)}catch(e){}}});
 
-/* Microphone -> 16 kHz 16-bit mono PCM chunks pushed to MIC.sink (Azure push stream). */
-const MIC={stream:null,src:null,proc:null,sink:null,level:0,idleT:null,
+/* Microphone -> 16 kHz 16-bit mono PCM chunks pushed to MIC.sink (Azure push stream).
+   iOS: a "live" track can go silent after TTS (playback→record session switch) or after
+   the AudioContext is suspended; MIC.ensure({fresh:true}) always gets a new getUserMedia
+   and rebuilds the graph. healthy() reports ended/muted/dead-context tracks. */
+const MIC={stream:null,src:null,proc:null,gain:null,sink:null,level:0,idleT:null,_ctx:null,_ensuring:null,peak:0,
  supported(){return !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)&&!!(window.AudioContext||window.webkitAudioContext)},
- async ensure(){clearTimeout(this.idleT);
-  if(this.stream&&this.stream.getAudioTracks().some(t=>t.readyState==='live')){AUD.get();return}
+ trackInfo(){const ts=this.stream&&this.stream.getAudioTracks&&this.stream.getAudioTracks();if(!ts||!ts.length)return 'none';return ts.map(t=>t.readyState+(t.muted?',muted':'')+(t.enabled?'':',disabled')+(t.ended?',ended':'')).join('|')},
+ healthy(){const ts=this.stream&&this.stream.getAudioTracks&&this.stream.getAudioTracks()||[];
+  const live=ts.some(t=>t.readyState==='live'&&t.enabled!==false&&!t.ended);
+  const c=AUD.ctx;return !!(live&&this.proc&&this.src&&this._ctx===c&&c&&c.state!=='closed'&&!this._zombie)},
+ _tear(){try{this.proc&&this.proc.disconnect();this.src&&this.src.disconnect();this.gain&&this.gain.disconnect()}catch(e){}this.proc=this.src=this.gain=null},
+ async ensure(opts){clearTimeout(this.idleT);if(this._ensuring)return this._ensuring;
+  const run=this._ensure(opts||{});this._ensuring=run;try{return await run}finally{if(this._ensuring===run)this._ensuring=null}},
+ async _ensure(opts){const fresh=!!(opts&&opts.fresh),keep=this.sink,c0=AUD.get();
+  try{if(navigator.audioSession)navigator.audioSession.type='play-and-record'}catch(e){}
+  if(c0&&c0.state!=='running'){try{ctxResume(c0)}catch(e){}for(let i=0;i<16&&c0.state!=='running';i++){try{ctxResume(c0)}catch(e){}await new Promise(r=>setTimeout(r,50))}
+   if(c0.state!=='running'){DBG('mic-ctx-stuck',c0.state);try{AUD.reset('mic-ensure suspended')}catch(e){}}}
+  const ok=!fresh&&this.healthy()&&AUD.ctx&&AUD.ctx.state==='running';
+  DBG(ok?'mic-reuse':'mic-fresh',(fresh?'asked':'auto')+' tracks='+this.trackInfo()+' ctx='+(AUD.ctx&&AUD.ctx.state)+' graph='+(this._ctx===AUD.ctx));
+  if(ok)return;
+  this._tear();this._zombie=false;this.peak=0;this.level=0;
+  const live=this.stream&&this.stream.getAudioTracks().some(t=>t.readyState==='live'&&t.enabled!==false&&!t.ended&&!t.muted);
+  if(fresh||!live){if(this.stream)try{this.stream.getTracks().forEach(t=>t.stop())}catch(e){}this.stream=null}
   if(!this.supported())throw new Error('nomic');
   let s0=null;if(window.__micP){s0=await window.__micP;window.__micP=null;if(s0&&!s0.getAudioTracks().some(t=>t.readyState==='live'))s0=null}
-  this.stream=s0||await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
-  const c=AUD.get();this.src=c.createMediaStreamSource(this.stream);
+  if(!this.stream)this.stream=s0||await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
+  const c=AUD.get();if(!c)throw new Error('nocontext');
+  if(c.state!=='running'){try{ctxResume(c)}catch(e){}}
+  this._ctx=c;this.src=c.createMediaStreamSource(this.stream);
   this.proc=c.createScriptProcessor(4096,1,1);const ratio=c.sampleRate/16000;
-  this.proc.onaudioprocess=e=>{const inp=e.inputBuffer.getChannelData(0);let sq=0;for(let i=0;i<inp.length;i+=8)sq+=inp[i]*inp[i];this.level=Math.sqrt(sq/(inp.length/8));
+  this.proc.onaudioprocess=e=>{const inp=e.inputBuffer.getChannelData(0);let sq=0,pk=0;for(let i=0;i<inp.length;i+=8){const v=inp[i];sq+=v*v;const a=Math.abs(v);if(a>pk)pk=a}this.level=Math.sqrt(sq/(inp.length/8));if(pk>this.peak)this.peak=pk;
    const out=e.outputBuffer.getChannelData(0);out.fill(0);if(!this.sink)return;
    const n=Math.floor(inp.length/ratio),pcm=new Int16Array(n);
    for(let i=0;i<n;i++){const a=Math.floor(i*ratio),b=Math.min(inp.length,Math.floor((i+1)*ratio));let s=0;for(let j=a;j<b;j++)s+=inp[j];s=s/Math.max(1,b-a);pcm[i]=Math.max(-32768,Math.min(32767,s*32767))}
    try{this.sink(pcm.buffer)}catch(err){}};
-  this.src.connect(this.proc);this.proc.connect(c.destination)},
+  /* gain 0: keeps the processor running without leaking the mic into the speaker (iOS) */
+  this.gain=c.createGain();this.gain.gain.value=0;this.src.connect(this.proc);this.proc.connect(this.gain);this.gain.connect(c.destination);
+  this.sink=keep||this.sink;
+  DBG('mic-on','tracks='+this.trackInfo()+' ctx='+c.state+' sr='+c.sampleRate)},
  /* release the mic after a while so the iPhone mic indicator turns off */
  idle(){clearTimeout(this.idleT);this.idleT=setTimeout(()=>this.release(),60000)},
- release(){this.sink=null;try{this.proc&&this.proc.disconnect();this.src&&this.src.disconnect()}catch(e){}if(this.stream)this.stream.getTracks().forEach(t=>t.stop());this.stream=this.src=this.proc=null}};
+ release(){this.sink=null;this._tear();if(this.stream)try{this.stream.getTracks().forEach(t=>t.stop())}catch(e){}this.stream=null;this._ctx=null;DBG('mic-off')}};
 function micFail(e){const n=e&&(e.name||e.message)||String(e);
  const m=/NotAllowed|Permission|denied/i.test(n)?(isIOS?'🎤 Permiso de micrófono denegado. En iPhone: Ajustes → Safari → Micrófono → Permitir (o toca "aA" en la barra → Ajustes del sitio web → Micrófono).':'🎤 Permiso de micrófono denegado. Actívalo en el candado de la barra de direcciones.')
   :/nomic|NotFound/i.test(n)?'No encuentro un micrófono en este dispositivo.':/Secure|https/i.test(n)?'🔒 El micrófono solo funciona en https:// (o localhost).':'Error de micrófono: '+n;
@@ -721,7 +744,7 @@ function micFail(e){const n=e&&(e.name||e.message)||String(e);
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const APP_VERSION='v13';
+const APP_VERSION='v14';
 /* on-device debug log (ring buffer, survives reloads) — Ajustes › Diagnóstico de voz */
 const DBGL=(()=>{try{const o=JSON.parse(localStorage.getItem('fc_dbg')||'[]');return Array.isArray(o)?o.slice(-200):[]}catch(e){return[]}})();let _dbgT=null;
 function DBG(ev,x){try{const L=DBGL[DBGL.length-1],xs=x==null?'':String(typeof x==='object'?JSON.stringify(x):x).slice(0,180);if(L&&L[1]===ev&&(L[2]===xs||L[3])&&Date.now()-L[0]<60000){L[3]=(L[3]||1)+1;return}DBGL.push([Date.now(),ev,x==null?'':String(typeof x==='object'?JSON.stringify(x):x).slice(0,180)]);if(DBGL.length>300)DBGL.splice(0,DBGL.length-300);if(!_dbgT)_dbgT=setTimeout(()=>{_dbgT=null;try{localStorage.setItem('fc_dbg',JSON.stringify(DBGL.slice(-200)))}catch(e){}},1500)}catch(e){}}
@@ -810,18 +833,24 @@ function listenOnce(onInterim){return new Promise(res=>{
  REC.active=true;REC.cur=r;AV().classList.add('listening');setMicButtons(true);
  try{r.start()}catch(e){REC.active=false;AV().classList.remove('listening');res({alts:[],err:'start'})}})}
 /* long speech (conversation, 4/3/2): returns controller {stop(), done:Promise<{text,first,last}>} */
-function listenLong(onUpdate){
- let on=true,finals=[],interim='',first=null,last=null,r,resolve,lastStart=0;
+function listenLong(onUpdate,o={}){
+ let on=true,finals=[],interim='',first=null,last=null,r,resolve,lastStart=0,why='',err=null;
+ const lang=o.lang||'en-US',idleMs=o.idleMs||10000,maxMs=o.maxMs||12000;
  const done=new Promise(x=>resolve=x);
  const txt=()=>(finals.join(' ')+' '+interim).replace(/\s+/g,' ').trim();
- function start(){if(!on)return;r=new SRC();r.lang='en-US';r.interimResults=true;r.continuous=!isAndroid;lastStart=Date.now();
+ const finish=()=>{REC.active=false;AV().classList.remove('listening');setMicButtons(false);clearInterval(wd);resolve({text:txt(),first,last,why:why||'manual',error:err})};
+ function start(){if(!on)return;r=new SRC();r.lang=lang;r.interimResults=true;r.continuous=!isAndroid;lastStart=Date.now();
   r.onresult=e=>{if(!first)first=Date.now();last=Date.now();interim='';for(let i=e.resultIndex;i<e.results.length;i++){const x=e.results[i];if(x.isFinal)finals.push(x[0].transcript.trim());else interim+=x[0].transcript}onUpdate&&onUpdate(txt())};
-  r.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){on=false;micError(e.error)}};
-  r.onend=()=>{if(interim){finals.push(interim.trim());interim=''}if(on){setTimeout(start,Date.now()-lastStart<500?400:50)}else{REC.active=false;AV().classList.remove('listening');setMicButtons(false);resolve({text:txt(),first,last})}};
-  REC.cur=r;try{r.start()}catch(e){}}
- if(!SRC){resolve({text:'',first:null,last:null});return{stop(){},done}}
+  r.onerror=e=>{err=e.error;DBG('webkit-err',e.error);if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){on=false;if(!o.quiet)micError(e.error)}};
+  r.onend=()=>{if(interim){finals.push(interim.trim());interim=''}if(on){setTimeout(start,Date.now()-lastStart<500?400:50)}else finish()};
+  REC.cur=r;try{r.start();DBG('webkit-start',lang)}catch(e){err=e.message||'start';DBG('webkit-start-fail',err);on=false;finish()}}
+ const wd=setInterval(()=>{if(!on)return;const now=Date.now();
+  if(first&&now-first>maxMs){why='max-'+Math.round(maxMs/1000)+'s';on=false;try{r&&r.stop()}catch(e){}finish()}
+  else if(!txt()&&now-(first||lastStart||now)>idleMs&&now-lastStart>idleMs){why='idle';on=false;try{r&&r.stop()}catch(e){}finish()}
+  else if(txt()&&last&&now-last>1600){why='silence';on=false;try{r&&r.stop()}catch(e){}finish()}},200);
+ if(!SRC){resolve({text:'',first:null,last:null,why:'no-webkit'});return{stop(){},done}}
  TTS&&TTS.cancel();REC.active=true;AV().classList.add('listening');setMicButtons(true);start();
- return{stop(){on=false;try{r.stop()}catch(e){resolve({text:txt(),first,last})}},done}}
+ return{stop(){why=why||'manual';on=false;try{r&&r.stop()}catch(e){finish()}},done}}
 function stopListening(){if(typeof AZ!=='undefined')AZ.stop();if(REC.cur){try{REC.cur.stop()}catch(e){}}}
 function setMicButtons(on){$$('button.mic').forEach(b=>b.classList.toggle('on',!!on&&b.dataset.busy==='1'))}
 
@@ -1100,11 +1129,16 @@ const AZ={sdk:null,loading:null,cur:null,ttsCache:new Map(),ttsOff:0,
  /* Unscripted continuous assessment for free talk. Returns controller {stop(), done:Promise<merged>} */
  /* Continuous free-talk recognition with RELIABLE end of turn (iOS-safe):
     Azure segmentation silence + "no new words" fallback + client mic-level silence + hard 12 s cap + idle cap + "no audio arriving" guard. */
- async free({onText,onStop,silenceMs=900,maxMs=12000,idleMs=10000,lang='en-US'}={}){await this.idle();
+ async free({onText,onStop,silenceMs=900,maxMs=12000,idleMs=10000,lang='en-US',fresh=false}={}){await this.idle();
   /* reserve the single recognizer slot BEFORE any await, so two quick taps can never open two recognizers */
   const tok={stop:()=>{tok.cancel=true}};this.cur=tok;const bail=()=>{if(this.cur===tok)this.cur=null;DBG('rec-cancelled-early');return{stop(){},done:Promise.resolve({text:'',words:[],pa:{},why:'cancelled'})}};
-  try{await withTimeout(this.load(),10000,'sdk');await withTimeout(MIC.ensure(),10000,'mic')}catch(e){if(this.cur===tok)this.cur=null;throw e}if(tok.cancel)return bail();TTS&&TTS.cancel();stopAudio();
-  if(!(await ctxRunning(800)))DBG('ctx-not-running',AUD.ctx&&AUD.ctx.state);if(tok.cancel)return bail();
+  try{await withTimeout(this.load(),10000,'sdk');
+    try{if(navigator.audioSession)navigator.audioSession.type='play-and-record'}catch(e){}
+    const afterTts=(typeof SAM_T==='number'&&Date.now()-SAM_T<8000)||(typeof SAM_ON!=='undefined'&&SAM_ON);
+    const stale=typeof MIC.healthy==='function'&&!MIC.healthy();
+    DBG('rec-mic',(afterTts?'after-tts ':'')+(stale?'stale ':'')+'tracks='+(MIC.trackInfo&&MIC.trackInfo())+' ctx='+(AUD.ctx&&AUD.ctx.state));
+    await withTimeout(MIC.ensure({fresh:!!(fresh||afterTts||stale)}),10000,'mic')}catch(e){if(this.cur===tok)this.cur=null;DBG('rec-mic-fail',e&&e.message);throw e}if(tok.cancel)return bail();TTS&&TTS.cancel();stopAudio();
+  if(!(await ctxRunning(800))){DBG('ctx-not-running',AUD.ctx&&AUD.ctx.state);try{AUD.ctx&&ctxResume(AUD.ctx)}catch(e){}}if(tok.cancel)return bail();
   const sdk=this.sdk,push=sdk.AudioInputStream.createPushStream(sdk.AudioStreamFormat.getWaveFormatPCM(16000,16,1));
   const cfg=this.speechConfig();cfg.speechRecognitionLanguage=lang;try{cfg.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs,String(Math.max(500,silenceMs-200)))}catch(e){}
   const rec=new sdk.SpeechRecognizer(cfg,sdk.AudioConfig.fromStreamInput(push));if(/^en/.test(lang))this.paConfig('').applyTo(rec);
@@ -1113,6 +1147,11 @@ const AZ={sdk:null,loading:null,cur:null,ttsCache:new Map(),ttsOff:0,
   rec.recognizing=(s,e)=>{const t=e.result.text||'';if(!first)first=Date.now();if(t!==interim){interim=t;last=Date.now()}onText&&onText(txt())};
   rec.recognized=(s,e)=>{last=Date.now();interim='';if(e.result.reason===sdk.ResultReason.RecognizedSpeech){const p=this.parse(e.result);if(p.text)segs.push(p)}onText&&onText(txt())};
   rec.canceled=(s,e)=>{if(e.reason===sdk.CancellationReason.Error){err=e.errorDetails;DBG('rec-canceled',err);stop('canceled')}};
+  /* "mic-dead" only when the processor stops delivering PCM (lastPCM goes stale).
+     Do NOT tear the graph down mid-listen based on instantaneous MIC.level: a quiet
+     frame of real speech was a false positive and killed a healthy iOS/Chrome stream.
+     A stream that is "live" but sending zeros still hits the 10 s idle, then tuNoHear
+     reopens with a fresh getUserMedia. */
   const wd=setInterval(()=>{if(stopped)return;const now=Date.now(),said=segs.length||interim;let r='';
    if(first&&now-first>maxMs)r='max-'+Math.round(maxMs/1000)+'s';
    else if(segs.length&&!interim&&now-last>silenceMs)r='silence';
@@ -2353,8 +2392,9 @@ const ST={listen:['🎤 Te escucho… habla ahora','Cuando termines, solo quéda
  speak:['🔊 Sam está hablando…','Puedes interrumpirlo cuando quieras: toca «Hablar yo».'],wait:['👂 Solo escuchas','El micrófono está cerrado. Toca «Hablar yo» o «Que hable Sam».'],think:['⏳ Sam está pensando…','Un momentito.'],
  idle:['👉 Toca para seguir','Y habla cuando veas «Te escucho».'],paused:['⏸️ Llamada en pausa','Toca para seguir platicando.'],sound:['👂 Haz el sonido tú…','Solo el sonido, sin la palabra.'],
  noHear:['👉 No te escuché','Toca para intentarlo otra vez.']};
-const STF={listen:['🎤 Te escucho… habla ahora','Cuando termines, quédate callado un segundo.'],listenManual:['🎤 Te escucho… habla ahora','Cuando termines, quédate callado un segundo.'],speak:['🔊 Sam está hablando…','Puedes interrumpirlo cuando quieras: toca «Hablar yo».'],wait:['👂 Solo escuchas','El micrófono está cerrado. Toca «Hablar yo» o «Que hable Sam».'],think:['⏳ Sam está pensando…','Un momentito.'],idle:['⏸️ En pausa','Toca «Hablar yo» o «Que hable Sam».'],paused:['⏸️ En pausa','Toca «Hablar yo» o «Que hable Sam».'],sound:['👂 Haz el sonido tú…','Solo el sonido.'],noHear:['⏸️ No te escuché','Toca «Hablar yo» cuando quieras.']};
-function tuState(k){if(!TU)return;if(TU.st!==k){DBG('state',(TU.st||'-')+'→'+k);TU.stSince=Date.now()}TU.st=k;const b=$('#tuState');if(!b)return;const x=STF[k]||STF.idle;const pl=$('#tuPauseF');if(pl)pl.textContent=k==='paused'||k==='idle'||k==='noHear'?'▶ Seguir':'Pausar';const kb=$('#tuKbF');if(kb)kb.classList.toggle('hide',!(k==='paused'||k==='idle'||k==='noHear'||k==='wait'));b.dataset.k=k;b.className='state st-'+k;tuHi(k);b.innerHTML=`<span class="st1">${x[0]}</span><span class="st2">${x[1]}</span>`;AV().classList.toggle('listening',k==='listen'||k==='listenManual')}
+const STF={listen:['🎤 Te escucho… habla ahora','Cuando termines, quédate callado un segundo.'],listenManual:['🎤 Te escucho… habla ahora','Cuando termines, quédate callado un segundo.'],speak:['🔊 Sam está hablando…','Puedes interrumpirlo cuando quieras: toca «Hablar yo».'],wait:['👂 Solo escuchas','El micrófono está cerrado. Toca «Hablar yo» o «Que hable Sam».'],think:['⏳ Sam está pensando…','Un momentito.'],idle:['⏸️ En pausa','Toca «Hablar yo» o «Que hable Sam».'],paused:['⏸️ En pausa','Toca «Hablar yo» o «Que hable Sam».'],sound:['👂 Haz el sonido tú…','Solo el sonido.'],noHear:['⏸️ No oí nada','Te escucho de nuevo. También puedes escribir abajo.'],noHearErr:['⚠️ Error de micrófono o del servicio','Toca «Hablar yo» o escribe tu mensaje abajo.']};
+function tuState(k){if(!TU)return;if(TU.st!==k){DBG('state',(TU.st||'-')+'→'+k);TU.stSince=Date.now()}TU.st=k;const b=$('#tuState');if(!b)return;const x=STF[k]||STF.idle;const pl=$('#tuPauseF');if(pl)pl.textContent=k==='paused'||k==='idle'||k==='noHear'||k==='noHearErr'?'▶ Seguir':'Pausar';const kb=$('#tuKbF');if(kb)kb.classList.remove('hide');b.dataset.k=k;b.className='state st-'+k;tuHi(k);b.innerHTML=`<span class="st1">${x[0]}</span><span class="st2">${x[1]}</span>`;AV().classList.toggle('listening',k==='listen'||k==='listenManual');
+ if(k==='noHear'||k==='noHearErr'||k==='paused'||k==='idle')tuOfferType()}
 function tuCallOn(){return !!(TU&&TU.call&&!TU.paused)}
 function tuRender(){const v=$('#v-tutor');if(TU.call==null)TU.call=TU.mode==='free'?true:S.settings.callOther===true;
  /* every conversation mode uses the same voice-only screen (one state machine, one mic) */
@@ -2379,21 +2419,60 @@ const tuMic=()=>tuStateTap();
 /* one listening turn; resolves when the user's turn is sent (or nothing heard) */
 async function tuListen(){if(!TU||TU.ctl||(!TU.forceListen&&(TU.busy||TU.drilling||TU.wait)))return;TU.forceListen=false;TU.wait=false;const myGen=TU.lgen=(TU.lgen||0)+1;TU.stopSpeak=true;stopAudio();TTS&&TTS.cancel();TU.paused=false;const FREE=true;const lng='en-US';const call=tuCallOn();
  const live=t=>{const e=$('#tuLive');if(e)e.textContent=t?'🗣️ '+t:''};
+ const fresh=!!TU._freshMic;TU._freshMic=false;
  if(AZ.cfg()&&MIC.supported()){try{tuState(call?'listen':'listenManual');
-   const c=TU.ctl=await AZ.free({onText:live,onStop:()=>{if(TU){TU.prof={stop:performance.now()};tuState('think')}},silenceMs:900,maxMs:12000,idleMs:10000,lang:lng});
+   const c=TU.ctl=await AZ.free({onText:live,onStop:()=>{if(TU){TU.prof={stop:performance.now()};tuState('think')}},silenceMs:900,maxMs:12000,idleMs:10000,lang:lng,fresh});
    let r=await c.done;DBG('heard',(r.why||'')+(r.partial?' (parcial)':'')+' «'+(r.text||'').slice(0,60)+'»');if(!TU)return;if(TU.ctl===c)TU.ctl=null;if(TU.lgen!==myGen){return}live('');if(TU.ignoreNext){TU.ignoreNext=false;tuHi(TU.st);return}
    if(TU.lgen!==myGen)return;TU.prof=TU.prof||{stop:performance.now()};TU.prof.rec=performance.now();let ulang='en';const audio=AZ.lastAudio||[];const r1text=r.text,r1conf=r.conf!=null?Math.round(r.conf*100):null;
-   /* Tutor libre: always assess English; detect Spanish (heuristic on the English pass) and re-recognize the same audio in es-MX */
-   if(FREE&&audio.length&&(esScore(r.text)>=0.2||(!r.text&&r.first)||(r.conf!=null&&r.conf<0.8)||(r.pa.pron!=null&&r.pa.pron<55))){tuState('think');try{const r2=await AZ.assessBuf(audio,'','es-MX',{pa:false});if(r2.text&&esScore(r2.text)>=0.25&&(r.conf==null||!r.text||(r2.conf||0)>r.conf+0.08)){ulang='es';r=Object.assign({},r,{text:r2.text,words:[],pa:{}})}}catch(e){console.warn('es pass',e)}}
-   if(!TU||TU.lgen!==myGen)return;TU.prof.lang=performance.now();S.diag={t:Date.now(),lang:ulang,text:r.text,en:r1text,conf:r1conf,pa:r.pa||{},weak:(r.words||[]).filter(w=>w.acc!=null).sort((a,b)=>a.acc-b.acc).slice(0,4).map(w=>w.w+' '+w.acc+((w.phon||[]).some(p=>p.acc<60)?' ('+(w.phon||[]).filter(p=>p.acc<60).map(p=>p.p+' '+p.acc).join(', ')+')':'')),err:r.error||''};save();
-   if(r.error&&!r.text){tuState('noHear');coachSay(azErr(r),{mood:'concern'});return}if(!r.text){TU.paused=true;tuState('noHear');return}
-   phStat(r.words);if(r.pa.pron!=null&&r.words.length){TU.pron.push(r.pa.pron);const t=today();t.att++;t.sum+=r.pa.pron;S.hist=S.hist||[];S.hist.push([Date.now(),r.pa.pron])}
+   const peak=pcmPeak(audio);DBG('heard-energy','peak='+peak+' first='+!!r.first+' conf='+r1conf+' why='+(r.why||''));
+   /* Tutor libre: English first (for pronunciation), then es-MX on the same audio if the English pass is empty/weak or the text looks Spanish — so a Spanish reply is not dropped. */
+   if(FREE&&audio.length&&(esScore(r.text)>=0.2||(peak>800&&!r.text)||(!r.text&&r.first)||(r.conf!=null&&r.conf<0.8)||(r.pa&&r.pa.pron!=null&&r.pa.pron<55))){tuState('think');try{const r2=await AZ.assessBuf(audio,'','es-MX',{pa:false});DBG('es-pass',(r2&&r2.text||'').slice(0,60)+' es='+esScore(r2&&r2.text));if(r2.text&&esScore(r2.text)>=0.25&&(r.conf==null||!r.text||(r2.conf||0)>r.conf+0.08||!r.text)){ulang='es';r=Object.assign({},r,{text:r2.text,words:[],pa:{}})}}catch(e){DBG('es-pass-fail',e&&e.message);console.warn('es pass',e)}}
+   if(!TU||TU.lgen!==myGen)return;TU.prof.lang=performance.now();S.diag={t:Date.now(),lang:ulang,text:r.text,en:r1text,conf:r1conf,pa:r.pa||{},weak:(r.words||[]).filter(w=>w.acc!=null).sort((a,b)=>a.acc-b.acc).slice(0,4).map(w=>w.w+' '+w.acc+((w.phon||[]).some(p=>p.acc<60)?' ('+(w.phon||[]).filter(p=>p.acc<60).map(p=>p.p+' '+p.acc).join(', ')+')':'')),err:r.error||'',why:r.why||''};save();
+   if((r.why==='mic-dead'||r.why==='no-audio')&&!r.text&&!TU._retriedMic){TU._retriedMic=true;DBG('listen-retry','fresh mic after '+r.why+' (before fallback)');TU.forceListen=true;TU._freshMic=true;tuListen();return}
+   const azFail=tuAzFailed(r);
+   if(azFail&&!r.text){const fb=await tuWebkitTurn(live,myGen,esScore(r1text)>=0.2?'en-US':'es-MX');if(fb&&fb.text){r=Object.assign({},r,{text:fb.text,words:[],pa:{},why:'webkit'});ulang=esScore(fb.text)>=0.25?'es':'en';DBG('listen-fallback','webkit got «'+fb.text.slice(0,50)+'»')}else{await tuNoHear(r,myGen,true);return}}
+   else if(!r.text){await tuNoHear(r,myGen,false);return}
+   if(!r.text){await tuNoHear(r,myGen,!!azFail);return}
+   TU.quiet=0;TU._retriedMic=false;
+   phStat(r.words);if(r.pa&&r.pa.pron!=null&&r.words.length){TU.pron.push(r.pa.pron);const t=today();t.att++;t.sum+=r.pa.pron;S.hist=S.hist||[];S.hist.push([Date.now(),r.pa.pron])}
    const ms=r.first&&r.last?r.last-r.first+1200:0;const a=analyzeSpeech(r.text,ms);if(a.wpm&&a.n>=8)S.wpm.push([Date.now(),a.wpm]);save();
-   tuSend(r.text,{pa:r.words&&r.words.length?r:null,audio:FREE&&ulang==='en'?audio:null,ulang})}catch(e){TU.ctl=null;tuState('idle');micFail(e)}return}
- if(canListen()){tuState(call?'listen':'listenManual');let last=Date.now(),txt='';TU.ctl=listenLong(t=>{txt=t;last=Date.now();live(t)});const ctl=TU.ctl;
-  const wd=call?setInterval(()=>{if(txt&&Date.now()-last>1500)ctl.stop()},300):null;const r=await ctl.done;clearInterval(wd);TU.ctl=null;live('');if(!TU)return;if(TU.ignoreNext){TU.ignoreNext=false;return}
-  if(r.text)tuSend(r.text);else tuState('noHear');return}
- tuState('idle');$('#tuType').classList.remove('hide');$('#tuLive').textContent='Este navegador no puede escucharte sin Azure. Escribe tu mensaje abajo.'}
+   tuSend(r.text,{pa:r.words&&r.words.length?r:null,audio:FREE&&ulang==='en'?audio:null,ulang})}catch(e){TU.ctl=null;DBG('listen-throw',e&&e.message);
+   if(SRC){const fb=await tuWebkitTurn(live,myGen,'es-MX');if(fb&&fb.text){tuSend(fb.text,{ulang:esScore(fb.text)>=0.25?'es':'en'});return}}
+   tuState('noHearErr');tuOfferType();micFail(e);return}return}
+ if(canListen()){tuState(call?'listen':'listenManual');const r=await tuWebkitTurn(live,myGen,S.settings.tuInLang==='es'?'es-MX':'en-US');live('');if(!TU)return;if(TU.ignoreNext){TU.ignoreNext=false;return}
+  if(r&&r.text)tuSend(r.text,{ulang:esScore(r.text)>=0.25?'es':'en'});else await tuNoHear(r||{},myGen,!!(r&&r.error));return}
+ tuState('idle');tuOfferType();$('#tuLive').textContent='Este navegador no puede escucharte sin Azure. Escribe tu mensaje abajo.'}
+
+function pcmPeak(bufs){let p=0;for(const b of bufs||[]){try{const v=new Int16Array(b);for(let i=0;i<v.length;i+=16){const a=Math.abs(v[i]);if(a>p)p=a}}catch(e){}}return p}
+function tuAzFailed(r){if(!r)return false;const w=r.why||'',e=String(r.error||'');
+ return w==='start-fail'||w==='canceled'||w==='mic-dead'||w==='no-audio'||!!(e&&!r.text&&w!=='idle'&&w!=='manual'&&w!=='silence')}
+function tuOfferType(){const t=$('#tuType');if(t)t.classList.remove('hide');const kb=$('#tuKbF');if(kb)kb.classList.remove('hide')}
+function tuErrHint(r){const e=String((r&&(r.error||r.why))||'');
+ if(/NotAllowed|Permission|denied|nomic/i.test(e))return 'Hay un problema con el micrófono: falta el permiso. En iPhone: Ajustes → Safari → Micrófono, o escribe tu mensaje abajo.';
+ if(/1006|network|websocket|connect|unreachable|401|403|key|Unauthorized/i.test(e))return 'No pude conectar con el reconocimiento de voz. Revisa tu internet o escribe tu mensaje abajo.';
+ if((r&&r.why)==='mic-dead'||(r&&r.why)==='no-audio')return 'El micrófono se cerró o no llegó audio. Toca «Hablar yo» o escribe tu mensaje abajo.';
+ return 'Hubo un error del micrófono o del servicio. Toca «Hablar yo» o escribe tu mensaje abajo.'}
+async function tuWebkitTurn(live,myGen,lang){if(!SRC){DBG('webkit-skip','unavailable');return{text:'',why:'no-webkit'}}
+ if(TU&&TU.lgen!==myGen)return{text:'',why:'stale'};
+ DBG('listen-fallback','webkit '+ (lang||'es-MX'));tuState('listen');
+ const ctl=listenLong(t=>live&&live(t),{lang:lang||'es-MX',idleMs:10000,maxMs:12000,quiet:true});TU.ctl=ctl;
+ const r=await ctl.done;if(TU&&TU.ctl===ctl)TU.ctl=null;DBG('webkit-heard',(r.why||'')+' «'+(r.text||'').slice(0,50)+'»');return r}
+async function tuNoHear(r,myGen,isErr){if(!TU||TU.lgen!==myGen)return;
+ const why=(r&&r.why)||'';DBG(isErr?'listen-error':'listen-silence',why+' '+(r&&r.error||''));
+ tuOfferType();
+ if(isErr){tuState('noHearErr');const hint=tuErrHint(r);const e=$('#tuLive');if(e)e.textContent=hint;
+  /* one mid-stream retry with a fresh mic if the track died after TTS */
+  if((why==='mic-dead'||why==='no-audio')&&!TU._retriedMic){TU._retriedMic=true;DBG('listen-retry','fresh mic after '+why);
+   tuState('speak');await tuSay(hint,{lang:'es',force:true});if(!TU||TU.lgen!==myGen)return;TU.paused=false;TU.forceListen=true;TU._freshMic=true;tuListen();return}
+  tuState('speak');await tuSay(hint,{lang:'es',force:true});if(!TU||TU.lgen!==myGen)return;TU.paused=true;tuState('noHearErr');return}
+ tuState('noHear');TU.quiet=(TU.quiet||0)+1;const n=uname();
+ const msg=TU.quiet<=2?pick([`¿No te oí, ${n}? Habla cuando quieras, te escucho.`,`No oí nada, ${n}. Te escucho de nuevo.`]):`No oí nada, ${n}. Toca «Hablar yo» o escribe tu mensaje abajo.`;
+ const e=$('#tuLive');if(e)e.textContent=TU.quiet<=2?'No oí nada. Te escucho de nuevo. También puedes escribir.':'No oí nada. Toca «Hablar yo» o escribe tu mensaje.';
+ tuState('speak');await tuSay(msg,{lang:'es',force:true});if(!TU||TU.lgen!==myGen)return;
+ if(TU.quiet<=2&&!TU.wait){TU.paused=false;DBG('listen-reopen','after-silence n='+TU.quiet);
+  await new Promise(x=>setTimeout(x,400));if(!TU||TU.lgen!==myGen||TU.ctl||TU.wait)return;
+  TU.forceListen=true;TU._freshMic=true;tuListen()}
+ else{TU.paused=true;tuState('noHear')}}
 /* after Sam finishes: open the mic automatically in call mode */
 function tuAfterSpeak(){if(!TU||TU.busy||TU.drilling)return;if(TU.wait){tuState('wait');return}if(TU.paused){tuState('paused');return}if(tuCallOn()){setTimeout(()=>{if(TU&&!TU.busy&&!TU.ctl&&!TU.paused&&TU.st!=='listen')tuListen()},250)}else tuState('idle')}
 /* optional voice barge-in while Sam talks (needs headphones to avoid echo) */
@@ -2615,7 +2694,7 @@ async function tuTalk(){if(!TU)return;AUD.unlock();TU.wait=false;TU.paused=false
  if(TU.drilling&&LOOP&&!LOOP.stop){if(AZ.cur&&TU.st==='listen'){AZ.stop();return}LOOP.jump=true;SPK++;stopAudio();TTS&&TTS.cancel();return}/* in a correction: jump straight to your repeat */
  if(TU.ctl&&(TU.st==='listen'||TU.st==='listenManual')){TU.ctl.stop();return}/* tap again = I'm done */
  if(TU.st==='speak'||TU.st==='think'||TU.drilling||TU.busy)TU.interrupted=true;
- tuHush();if(TU.ctl){TU.ignoreNext=true;TU.ctl.stop()}AZ.cancelBuf();tuState('listen');await AZ.idle();if(!TU)return;TU.ctl=null;TU.forceListen=true;tuListen()}
+ tuHush();if(TU.ctl){TU.ignoreNext=true;TU.ctl.stop()}AZ.cancelBuf();tuState('listen');await AZ.idle();if(!TU)return;TU.ctl=null;TU.forceListen=true;TU._freshMic=true;TU.paused=false;tuListen()}
 async function tuSamNow(){if(!TU)return;AUD.unlock();TU.wait=false;TU.paused=false;
  if(TU.drilling&&LOOP&&!LOOP.stop){if(AZ.cur&&TU.st==='listen'){LOOP.replay=true;AZ.stop()}return}/* in a correction: Sam models it again */
  if(TU.ctl){TU.ignoreNext=true;TU.ctl.stop();TU.ctl=null}if(AZ.cur&&TU.drilling&&LOOP)LOOP.stop=true;await AZ.idle();if(!TU)return;
