@@ -3138,7 +3138,7 @@ function rDayNo(d){return rDays(d.lvl).indexOf(d)+1}
 function rLvlPct(l){const L=rDays(l);return L.length?L.filter(d=>rS().done[d.id]).length/L.length:0}
 const nameFix=s=>String(s||'').replace(/Yonathan/g,uname());
 /* ---- HOME: Mi ruta de hoy ---- */
-function routeHomeHTML(){const t=rToday(),r=rS(),Lv=RLEVELS[r.lvl];const d=rDay(t);const steps=t.check?RCSTEPS:RSTEPS;const fin=t.fin;
+function routeHomeHTML(){const t=rToday(),r=rS(),d=rDay(t),Lv=RLEVELS[t.check?t.lvl:(d?d.lvl:r.lvl)];const steps=t.check?RCSTEPS:RSTEPS;const fin=t.fin;
  const title=t.check?`🏆 Prueba del ${esc(Lv.name.split(' · ')[0])}`:`Día ${rDayNo(d)} · ${esc(d.t)}`;
  const pics=t.check?'🎯💬🏆':d.w.map(w=>w.e).join(' ');
  const L=rDays(r.lvl),nDone=L.filter(x=>r.done[x.id]).length;
@@ -3151,8 +3151,8 @@ function routeHomeHTML(){const t=rToday(),r=rS(),Lv=RLEVELS[r.lvl];const d=rDay(
  <div class="rt-lvl"><span>${esc(Lv.name)}</span><span>${nDone}/${L.length} días</span></div><div class="bar"><i style="width:${Math.round(nDone/L.length*100)}%"></i></div></div>`}
 /* ---- LESSON VIEW ---- */
 let RT=null;
-function routeView(){const t=rToday();const d=rDay(t);const steps=t.check?RCSTEPS:RSTEPS;const Lv=RLEVELS[rS().lvl];
- $('#v-daily').innerHTML=`<div class="rt-head"><button class="sm" id="rtBack">← Inicio</button><div><div class="small mut">${esc(Lv.name)}</div><b>${t.check?'🏆 Prueba del nivel':`Día ${rDayNo(d)} · ${esc(d.t)}`}</b></div></div>
+function routeView(){const t=rToday();const d=rDay(t);const steps=t.check?RCSTEPS:RSTEPS;const Lv=RLEVELS[t.check?t.lvl:(d?d.lvl:rS().lvl)];
+ $('#v-daily').innerHTML=`<div class="rt-head"><button class="sm" id="rtBack">← Inicio</button><div><div class="small mut">${esc(Lv.name)}</div><b>${t.check?`🏆 Prueba del ${esc(Lv.name.split(' · ')[0])}`:`Día ${rDayNo(d)} · ${esc(d.t)}`}</b></div></div>
  <ol class="rt-steps rt-steps-h">${steps.map(([i,n],k)=>`<li class="${t.fin||k<t.step?'ok':k===t.step?'cur':''}"><span class="n">${t.fin||k<t.step?'✓':k+1}</span><span class="i">${i}</span><small>${n}</small></li>`).join('')}</ol>
  <div id="rtStage"></div><div id="rtFb"></div>
  <form id="rtType" class="rt-type hide" autocomplete="off"><input id="rtTypeIn" placeholder="✍️ O escríbelo aquí" autocapitalize="off" spellcheck="false"><button class="pri" type="submit">Enviar</button></form>
